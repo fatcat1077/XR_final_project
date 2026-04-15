@@ -26,6 +26,17 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
     [Header("Scene Settings")]
     [SerializeField] private int classroomSceneBuildIndex = 1;
 
+    [Header("Photon Region (set same value in PhotonAppSettings.asset)")]
+    [SerializeField] private string fixedRegion = "hk";
+
+    [Header("Debug Room Name")]
+    [SerializeField] private bool useFixedRoomName = true;
+    [SerializeField] private string fixedRoomName = "XRRoom01_voice";
+
+    [Header("Client Retry Settings")]
+    [SerializeField] private int clientJoinRetryCount = 5;
+    [SerializeField] private float clientJoinRetryDelaySeconds = 1f;
+
     private NetworkRunner runner;
     private bool isStartingGame = false;
 
@@ -50,7 +61,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         LocalUserProfile.RoomName = GetRoomName();
 
         Debug.Log($"[FusionLauncher] StartAsTeacherHost clicked. RoomName = {LocalUserProfile.RoomName}");
-        await StartGame(GameMode.Host);
+        await StartGameWithRetry(GameMode.Host);
     }
 
     public async void StartAsStudentClient()
@@ -65,11 +76,17 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         LocalUserProfile.RoomName = GetRoomName();
 
         Debug.Log($"[FusionLauncher] StartAsStudentClient clicked. RoomName = {LocalUserProfile.RoomName}");
-        await StartGame(GameMode.Client);
+        await StartGameWithRetry(GameMode.Client);
     }
 
     private string GetRoomName()
     {
+        if (useFixedRoomName)
+        {
+            Debug.Log($"[FusionLauncher] GetRoomName() using fixed room name = '{fixedRoomName}'");
+            return fixedRoomName;
+        }
+
         if (roomNameInput != null && !string.IsNullOrWhiteSpace(roomNameInput.text))
         {
             string trimmed = roomNameInput.text.Trim();
@@ -81,21 +98,60 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         return "XRRoom01";
     }
 
-    private async Task StartGame(GameMode mode)
+    private async Task StartGameWithRetry(GameMode mode)
     {
-        Debug.Log("====================================================");
-        Debug.Log("[FusionLauncher] StartGame() BEGIN");
+        int maxAttempts = (mode == GameMode.Client) ? Mathf.Max(1, clientJoinRetryCount) : 1;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            Debug.Log("====================================================");
+            Debug.Log($"[FusionLauncher] StartGameWithRetry attempt {attempt}/{maxAttempts} for mode={mode}");
+
+            StartGameResult result = await StartGameOnce(mode);
+
+            if (result.Ok)
+            {
+                Debug.Log($"[FusionLauncher] StartGameWithRetry SUCCESS on attempt {attempt}");
+                return;
+            }
+
+            bool shouldRetry =
+                mode == GameMode.Client &&
+                result.ShutdownReason == ShutdownReason.GameNotFound &&
+                attempt < maxAttempts;
+
+            if (!shouldRetry)
+            {
+                Debug.LogWarning($"[FusionLauncher] No more retry. Final reason = {result.ShutdownReason}, message = {result.ErrorMessage}");
+                return;
+            }
+
+            string message = $"Room not found yet. Retrying {attempt}/{maxAttempts}...";
+            SetStatus(message);
+            Debug.LogWarning($"[FusionLauncher] {message}");
+
+            await Task.Delay(TimeSpan.FromSeconds(clientJoinRetryDelaySeconds));
+        }
+    }
+
+    private async Task<StartGameResult> StartGameOnce(GameMode mode)
+    {
+        Debug.Log("[FusionLauncher] StartGameOnce() BEGIN");
         Debug.Log($"[FusionLauncher] Mode = {mode}");
         Debug.Log($"[FusionLauncher] Role = {LocalUserProfile.Role}");
         Debug.Log($"[FusionLauncher] RoomName = {LocalUserProfile.RoomName}");
         Debug.Log($"[FusionLauncher] classroomSceneBuildIndex = {classroomSceneBuildIndex}");
+        Debug.Log($"[FusionLauncher] Expected Fixed Region (set manually in PhotonAppSettings.asset) = {fixedRegion}");
+
+        StartGameResult failedResult;
 
         if (runnerPrefab == null)
         {
             SetStatus("Runner Prefab is missing!");
             Debug.LogError("[FusionLauncher] runnerPrefab is not assigned.");
             isStartingGame = false;
-            return;
+            failedResult = default;
+            return failedResult;
         }
 
         if (!IsSceneBuildIndexValid(classroomSceneBuildIndex))
@@ -103,7 +159,8 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
             SetStatus("Start failed: Invalid Scene Index");
             Debug.LogError($"[FusionLauncher] Invalid scene build index: {classroomSceneBuildIndex}");
             isStartingGame = false;
-            return;
+            failedResult = default;
+            return failedResult;
         }
 
         string scenePath = SceneUtility.GetScenePathByBuildIndex(classroomSceneBuildIndex);
@@ -112,7 +169,6 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         isStartingGame = true;
         SetStatus($"Starting as {mode}...");
 
-        // 清理舊 runner
         if (runner != null)
         {
             Debug.Log("[FusionLauncher] Existing runner found. Cleaning old runner...");
@@ -121,11 +177,9 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
             {
                 runner.RemoveCallbacks(this);
 
-                var spawnerOld = runner.GetComponent<PlayerSpawner>();
-                if (spawnerOld != null)
-                {
-                    runner.RemoveCallbacks(spawnerOld);
-                }
+                var oldSpawner = runner.GetComponent<PlayerSpawner>();
+                if (oldSpawner != null)
+                    runner.RemoveCallbacks(oldSpawner);
 
                 if (runner.IsRunning)
                 {
@@ -148,17 +202,14 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
             runner = null;
         }
 
-        // 建立新 runner
         try
         {
             runner = Instantiate(runnerPrefab);
             runner.name = "NetworkRunner";
             runner.ProvideInput = true;
 
-            // 註冊 FusionLauncher 自己
             runner.AddCallbacks(this);
 
-            // 註冊 PlayerSpawner
             var spawner = runner.GetComponent<PlayerSpawner>();
             if (spawner != null)
             {
@@ -179,14 +230,19 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
             Debug.LogError($"[FusionLauncher] Failed while creating runner: {e}");
             SetStatus("Start failed: Runner Creation Exception");
             isStartingGame = false;
-            return;
+            failedResult = default;
+            return failedResult;
         }
 
         var sceneInfo = new NetworkSceneInfo();
         sceneInfo.AddSceneRef(SceneRef.FromIndex(classroomSceneBuildIndex), LoadSceneMode.Single);
+
+        Debug.Log($"[FusionLauncher] StartGame with RoomName = {LocalUserProfile.RoomName}");
+        Debug.Log($"[FusionLauncher] StartGame with Region = {fixedRegion} (must match PhotonAppSettings.asset)");
         Debug.Log($"[FusionLauncher] NetworkSceneInfo created with SceneRef.FromIndex({classroomSceneBuildIndex}) and LoadSceneMode.Single");
 
         StartGameResult result;
+
         try
         {
             Debug.Log("[FusionLauncher] Calling runner.StartGame(...)");
@@ -206,7 +262,8 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
             Debug.LogError($"[FusionLauncher] StartGame exception: {e}");
             SetStatus("Start failed: Exception");
             isStartingGame = false;
-            return;
+            failedResult = default;
+            return failedResult;
         }
 
         Debug.Log($"[FusionLauncher] StartGame result.Ok = {result.Ok}");
@@ -217,6 +274,8 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         {
             SetStatus($"Connected: {LocalUserProfile.RoomName}");
             Debug.Log($"[FusionLauncher] StartGame SUCCESS. Mode = {mode}, Room = {LocalUserProfile.RoomName}");
+
+            TryLogSessionInfo(runner, "[FusionLauncher] SessionInfo after StartGame SUCCESS");
 
             if (lobbyCanvas != null)
             {
@@ -262,8 +321,29 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         }
 
         isStartingGame = false;
-        Debug.Log("[FusionLauncher] StartGame() END");
+        Debug.Log("[FusionLauncher] StartGameOnce() END");
         Debug.Log("====================================================");
+
+        return result;
+    }
+
+    private void TryLogSessionInfo(NetworkRunner runner, string prefix)
+    {
+        try
+        {
+            if (runner != null && runner.SessionInfo.IsValid)
+            {
+                Debug.Log($"{prefix}: Name={runner.SessionInfo.Name}, Region={runner.SessionInfo.Region}, IsOpen={runner.SessionInfo.IsOpen}, IsVisible={runner.SessionInfo.IsVisible}");
+            }
+            else
+            {
+                Debug.Log($"{prefix}: SessionInfo not valid yet.");
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"{prefix}: failed to read SessionInfo. {e.Message}");
+        }
     }
 
     private void SetStatus(string message)
@@ -291,6 +371,11 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         Debug.Log($"[FusionLauncher] lobbyEventSystem assigned = {lobbyEventSystem != null}");
         Debug.Log($"[FusionLauncher] lobbyCamera assigned = {lobbyCamera != null}");
         Debug.Log($"[FusionLauncher] classroomSceneBuildIndex = {classroomSceneBuildIndex}");
+        Debug.Log($"[FusionLauncher] fixedRegion (manual) = {fixedRegion}");
+        Debug.Log($"[FusionLauncher] useFixedRoomName = {useFixedRoomName}");
+        Debug.Log($"[FusionLauncher] fixedRoomName = {fixedRoomName}");
+        Debug.Log($"[FusionLauncher] clientJoinRetryCount = {clientJoinRetryCount}");
+        Debug.Log($"[FusionLauncher] clientJoinRetryDelaySeconds = {clientJoinRetryDelaySeconds}");
         Debug.Log($"[FusionLauncher] sceneCountInBuildSettings = {SceneManager.sceneCountInBuildSettings}");
 
         for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
@@ -320,6 +405,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
     public void OnConnectedToServer(NetworkRunner runner)
     {
         Debug.Log("[FusionLauncher] OnConnectedToServer");
+        TryLogSessionInfo(runner, "[FusionLauncher] SessionInfo on connect");
     }
 
     public void OnDisconnectedFromServer(NetworkRunner runner, NetDisconnectReason reason)
@@ -341,6 +427,14 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
     public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList)
     {
         Debug.Log($"[FusionLauncher] OnSessionListUpdated: count = {sessionList?.Count ?? 0}");
+
+        if (sessionList != null)
+        {
+            foreach (var session in sessionList)
+            {
+                Debug.Log($"[FusionLauncher] Session listed: Name={session.Name}, Region={session.Region}, IsOpen={session.IsOpen}, IsVisible={session.IsVisible}");
+            }
+        }
     }
 
     public void OnCustomAuthenticationResponse(NetworkRunner runner, Dictionary<string, object> data) { }
