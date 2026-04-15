@@ -13,8 +13,6 @@ GameObject:
   - component: {fileID: 8636114491290587189}
   - component: {fileID: 2270315421819775325}
   - component: {fileID: -4082568899572709609}
-  - component: {fileID: 1906280133125632788}
-  - component: {fileID: 5189410588286404393}
   m_Layer: 0
   m_Name: NetworkRunnerObject
   m_TagString: Untagged
@@ -119,30 +117,3 @@ MonoBehaviour:
   AutoConnectAndJoin: 1
   UseFusionAppSettings: 1
   UseFusionAuthValues: 1
---- !u!114 &1906280133125632788
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8491014738839138119}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6376dd7fc23b3764483a7349b58502e2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &5189410588286404393
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8491014738839138119}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6c717ba412de095488718308650b2129, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  recorder: {fileID: 0}
-  speaker: {fileID: 0}
-  speakerAudioSource: {fileID: 0}

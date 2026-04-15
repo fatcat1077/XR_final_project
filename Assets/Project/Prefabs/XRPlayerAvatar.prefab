@@ -166,7 +166,7 @@ MonoBehaviour:
   interestGroup: 0
   useTargetPlayers: 0
   targetPlayers: 
-  debugEchoMode: 0
+  debugEchoMode: 1
   reliableMode: 0
   encrypt: 0
   transmitEnabled: 1
@@ -206,6 +206,8 @@ GameObject:
   - component: {fileID: 7042505742636643925}
   - component: {fileID: 1430244117058199942}
   - component: {fileID: 1157532022139272701}
+  - component: {fileID: 8069001269156984286}
+  - component: {fileID: 2816657939916980440}
   m_Layer: 0
   m_Name: XRPlayerAvatar
   m_TagString: Untagged
@@ -321,6 +323,8 @@ MonoBehaviour:
   NetworkedBehaviours:
   - {fileID: 1430244117058199942}
   - {fileID: 1157532022139272701}
+  - {fileID: 8069001269156984286}
+  - {fileID: 2816657939916980440}
   ForceRemoteRenderTimeframe: 0
 --- !u!114 &1430244117058199942
 MonoBehaviour:
@@ -354,3 +358,30 @@ MonoBehaviour:
   recorder: {fileID: 3580203783903205557}
   speaker: {fileID: 1600749257176719232}
   speakerAudioSource: {fileID: 9073897973425197852}
+--- !u!114 &8069001269156984286
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7138955750620164721}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2ff320c819527f046923b646a386dc73, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  recorder: {fileID: 3580203783903205557}
+  speaker: {fileID: 1600749257176719232}
+  audioSource: {fileID: 9073897973425197852}
+--- !u!114 &2816657939916980440
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7138955750620164721}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6376dd7fc23b3764483a7349b58502e2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

@@ -13,6 +13,13 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
     [SerializeField] private TMP_InputField roomNameInput;
     [SerializeField] private TMP_Text statusText;
 
+    [Header("Lobby Objects To Hide")]
+    [SerializeField] private GameObject lobbyCanvas;
+    [SerializeField] private GameObject lobbyEventSystem;
+
+    [Header("Lobby Camera To Disable")]
+    [SerializeField] private Camera lobbyCamera;
+
     [Header("Runner Prefab")]
     [SerializeField] private NetworkRunner runnerPrefab;
 
@@ -42,7 +49,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         LocalUserProfile.Role = UserRole.Teacher;
         LocalUserProfile.RoomName = GetRoomName();
 
-        Debug.Log($"[FusionLauncher] StartAsTeacherHost clicked. RoomName={LocalUserProfile.RoomName}");
+        Debug.Log($"[FusionLauncher] StartAsTeacherHost clicked. RoomName = {LocalUserProfile.RoomName}");
         await StartGame(GameMode.Host);
     }
 
@@ -57,7 +64,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         LocalUserProfile.Role = UserRole.Student;
         LocalUserProfile.RoomName = GetRoomName();
 
-        Debug.Log($"[FusionLauncher] StartAsStudentClient clicked. RoomName={LocalUserProfile.RoomName}");
+        Debug.Log($"[FusionLauncher] StartAsStudentClient clicked. RoomName = {LocalUserProfile.RoomName}");
         await StartGame(GameMode.Client);
     }
 
@@ -114,6 +121,12 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
             {
                 runner.RemoveCallbacks(this);
 
+                var spawnerOld = runner.GetComponent<PlayerSpawner>();
+                if (spawnerOld != null)
+                {
+                    runner.RemoveCallbacks(spawnerOld);
+                }
+
                 if (runner.IsRunning)
                 {
                     Debug.Log("[FusionLauncher] Old runner is running. Shutting down...");
@@ -142,9 +155,21 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
             runner.name = "NetworkRunner";
             runner.ProvideInput = true;
 
+            // 註冊 FusionLauncher 自己
             runner.AddCallbacks(this);
 
-            // 只保留 runner，本物件仍屬於 Lobby 場景，之後會隨 Single scene unload 被刪掉
+            // 註冊 PlayerSpawner
+            var spawner = runner.GetComponent<PlayerSpawner>();
+            if (spawner != null)
+            {
+                runner.AddCallbacks(spawner);
+                Debug.Log("[FusionLauncher] PlayerSpawner callbacks registered.");
+            }
+            else
+            {
+                Debug.LogError("[FusionLauncher] PlayerSpawner not found on runner prefab!");
+            }
+
             DontDestroyOnLoad(runner.gameObject);
 
             Debug.Log("[FusionLauncher] Runner instantiated and registered.");
@@ -186,15 +211,45 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
         Debug.Log($"[FusionLauncher] StartGame result.Ok = {result.Ok}");
         Debug.Log($"[FusionLauncher] StartGame result.ShutdownReason = {result.ShutdownReason}");
-        Debug.LogError($"[FusionLauncher] StartGame result.ErrorMessage = {result.ErrorMessage}");
+        Debug.Log($"[FusionLauncher] StartGame result.ErrorMessage = {result.ErrorMessage}");
 
         if (result.Ok)
         {
             SetStatus($"Connected: {LocalUserProfile.RoomName}");
-            Debug.Log($"[FusionLauncher] StartGame SUCCESS. Mode={mode}, Room={LocalUserProfile.RoomName}");
+            Debug.Log($"[FusionLauncher] StartGame SUCCESS. Mode = {mode}, Room = {LocalUserProfile.RoomName}");
 
-            // 成功後，避免 Lobby 物件繼續更新 UI
+            if (lobbyCanvas != null)
+            {
+                lobbyCanvas.SetActive(false);
+                Debug.Log("[FusionLauncher] Lobby Canvas hidden.");
+            }
+            else
+            {
+                Debug.LogWarning("[FusionLauncher] lobbyCanvas is not assigned.");
+            }
+
+            if (lobbyEventSystem != null)
+            {
+                lobbyEventSystem.SetActive(false);
+                Debug.Log("[FusionLauncher] Lobby EventSystem hidden.");
+            }
+            else
+            {
+                Debug.LogWarning("[FusionLauncher] lobbyEventSystem is not assigned.");
+            }
+
+            if (lobbyCamera != null)
+            {
+                lobbyCamera.gameObject.SetActive(false);
+                Debug.Log("[FusionLauncher] Lobby Camera disabled.");
+            }
+            else
+            {
+                Debug.LogWarning("[FusionLauncher] lobbyCamera is not assigned.");
+            }
+
             gameObject.SetActive(false);
+            Debug.Log("[FusionLauncher] FusionLauncherObject disabled.");
         }
         else
         {
@@ -203,7 +258,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
                 : $"Start failed: {result.ShutdownReason}\n{result.ErrorMessage}";
 
             SetStatus(finalMessage);
-            Debug.LogError($"[FusionLauncher] StartGame FAILED. ShutdownReason={result.ShutdownReason}, ErrorMessage={result.ErrorMessage}");
+            Debug.LogError($"[FusionLauncher] StartGame FAILED. ShutdownReason = {result.ShutdownReason}, ErrorMessage = {result.ErrorMessage}");
         }
 
         isStartingGame = false;
@@ -232,6 +287,9 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
     {
         Debug.Log("--------------- FusionLauncher Config ---------------");
         Debug.Log($"[FusionLauncher] runnerPrefab assigned = {runnerPrefab != null}");
+        Debug.Log($"[FusionLauncher] lobbyCanvas assigned = {lobbyCanvas != null}");
+        Debug.Log($"[FusionLauncher] lobbyEventSystem assigned = {lobbyEventSystem != null}");
+        Debug.Log($"[FusionLauncher] lobbyCamera assigned = {lobbyCamera != null}");
         Debug.Log($"[FusionLauncher] classroomSceneBuildIndex = {classroomSceneBuildIndex}");
         Debug.Log($"[FusionLauncher] sceneCountInBuildSettings = {SceneManager.sceneCountInBuildSettings}");
 
@@ -310,6 +368,31 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
     public void OnSceneLoadDone(NetworkRunner runner)
     {
         Debug.Log("[FusionLauncher] OnSceneLoadDone");
+
+        for (int i = 0; i < SceneManager.sceneCount; i++)
+        {
+            Scene scene = SceneManager.GetSceneAt(i);
+            Debug.Log($"[FusionLauncher] Loaded Scene[{i}] = {scene.name}, isLoaded={scene.isLoaded}");
+        }
+
+        Scene activeScene = SceneManager.GetActiveScene();
+        Debug.Log($"[FusionLauncher] Active Scene = {activeScene.name}");
+
+        AudioListener[] listeners = FindObjectsOfType<AudioListener>(true);
+        Debug.Log($"[FusionLauncher] AudioListener count = {listeners.Length}");
+
+        foreach (var listener in listeners)
+        {
+            Debug.Log($"[FusionLauncher] AudioListener on object = {listener.gameObject.name}, active={listener.gameObject.activeInHierarchy}");
+        }
+
+        Camera[] cameras = FindObjectsOfType<Camera>(true);
+        Debug.Log($"[FusionLauncher] Camera count = {cameras.Length}");
+
+        foreach (var cam in cameras)
+        {
+            Debug.Log($"[FusionLauncher] Camera = {cam.gameObject.name}, active={cam.gameObject.activeInHierarchy}");
+        }
     }
 
     public void OnSceneLoadStart(NetworkRunner runner)

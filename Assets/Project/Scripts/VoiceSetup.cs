@@ -18,7 +18,18 @@ public class VoiceSetup : NetworkBehaviour
     {
         bool isLocalPlayer = Object != null && Object.HasInputAuthority;
 
-        // 本地玩家：開錄音與傳輸
+        Debug.Log($"[VoiceSetup] Spawned on {gameObject.name}");
+        Debug.Log($"[VoiceSetup] isLocalPlayer = {isLocalPlayer}");
+        Debug.Log($"[VoiceSetup] recorder assigned = {recorder != null}");
+        Debug.Log($"[VoiceSetup] speaker assigned = {speaker != null}");
+        Debug.Log($"[VoiceSetup] audioSource assigned = {speakerAudioSource != null}");
+        Debug.Log($"[VoiceSetup] mic device count = {Microphone.devices.Length}");
+
+        foreach (var d in Microphone.devices)
+        {
+            Debug.Log($"[VoiceSetup] mic device = {d}");
+        }
+
         if (recorder != null)
         {
             recorder.SourceType = Recorder.InputSourceType.Microphone;
@@ -26,19 +37,27 @@ public class VoiceSetup : NetworkBehaviour
             recorder.RecordingEnabled = isLocalPlayer;
             recorder.TransmitEnabled = isLocalPlayer;
             recorder.DebugEchoMode = false;
+
+            Debug.Log($"[VoiceSetup] recorder.RecordWhenJoined = {recorder.RecordWhenJoined}");
+            Debug.Log($"[VoiceSetup] recorder.RecordingEnabled = {recorder.RecordingEnabled}");
+            Debug.Log($"[VoiceSetup] recorder.TransmitEnabled = {recorder.TransmitEnabled}");
+            Debug.Log($"[VoiceSetup] recorder.SourceType = {recorder.SourceType}");
         }
 
-        // AudioSource：本地自己不播自己的聲音，遠端才播
         if (speakerAudioSource != null)
         {
             speakerAudioSource.playOnAwake = false;
-            speakerAudioSource.mute = isLocalPlayer;
-            speakerAudioSource.spatialBlend = 0f; // 先做 2D 音效，最穩
+            //speakerAudioSource.mute = isLocalPlayer;
+            speakerAudioSource.spatialBlend = 0f;
+
+            Debug.Log($"[VoiceSetup] audioSource.mute = {speakerAudioSource.mute}");
+            Debug.Log($"[VoiceSetup] audioSource.spatialBlend = {speakerAudioSource.spatialBlend}");
         }
 
         if (speaker != null)
         {
             speaker.enabled = true;
+            Debug.Log("[VoiceSetup] speaker.enabled = true");
         }
 
         Debug.Log(isLocalPlayer
@@ -52,5 +71,6 @@ public class VoiceSetup : NetworkBehaviour
             return;
 
         recorder.TransmitEnabled = !mute;
+        Debug.Log($"[VoiceSetup] SetMute({mute}) -> recorder.TransmitEnabled = {!mute}");
     }
 }
