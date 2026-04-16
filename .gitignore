@@ -24,3 +24,4 @@ UserSettings/
 *.mdb
 *.opendb
 *.VC.db
+*venv
