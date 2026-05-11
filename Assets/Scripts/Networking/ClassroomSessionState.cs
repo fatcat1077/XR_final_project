@@ -26,6 +26,9 @@ public class ClassroomSessionState : NetworkBehaviour
     [Networked, OnChangedRender(nameof(HandleBlackboardTextChanged))]
     public NetworkString<_512> BlackboardText { get; private set; }
 
+    public bool IsStudentHandRaisedValue => IsStudentHandRaised;
+    public string BlackboardTextValue => BlackboardText.ToString();
+
     public event Action<ClassroomEnvironment> EnvironmentChanged;
     public event Action<bool> StudentHandRaisedChanged;
     public event Action<string> BlackboardTextChanged;
