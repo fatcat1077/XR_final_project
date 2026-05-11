@@ -5,6 +5,8 @@ using UnityEngine.Events;
 
 public class ClassroomSessionState : NetworkBehaviour
 {
+    private const int BlackboardTextMaxLength = 512;
+
     [Serializable]
     public class ClassroomEnvironmentUnityEvent : UnityEvent<ClassroomEnvironment>
     {
@@ -32,11 +34,18 @@ public class ClassroomSessionState : NetworkBehaviour
     public UnityEvent<bool> OnStudentHandRaisedChanged => onStudentHandRaisedChanged;
     public UnityEvent<string> OnBlackboardTextChanged => onBlackboardTextChanged;
 
+    private bool hasPublishedEnvironment;
+    private bool hasPublishedStudentHandRaised;
+    private bool hasPublishedBlackboardText;
+    private ClassroomEnvironment lastPublishedEnvironment;
+    private bool lastPublishedStudentHandRaised;
+    private string lastPublishedBlackboardText = string.Empty;
+
     public override void Spawned()
     {
-        NotifyEnvironmentChanged();
-        NotifyStudentHandRaisedChanged();
-        NotifyBlackboardTextChanged();
+        PublishEnvironmentChanged(force: true);
+        PublishStudentHandRaisedChanged(force: true);
+        PublishBlackboardTextChanged(force: true);
     }
 
     // UI usage:
@@ -107,53 +116,80 @@ public class ClassroomSessionState : NetworkBehaviour
     private void SetEnvironmentState(ClassroomEnvironment environment)
     {
         CurrentEnvironment = environment;
-        NotifyEnvironmentChanged();
+        PublishEnvironmentChanged(force: false);
     }
 
     private void SetStudentHandRaisedState(bool raised)
     {
         IsStudentHandRaised = raised;
-        NotifyStudentHandRaisedChanged();
+        PublishStudentHandRaisedChanged(force: false);
     }
 
     private void SetBlackboardTextState(string text)
     {
-        BlackboardText = text ?? string.Empty;
-        NotifyBlackboardTextChanged();
+        BlackboardText = NormalizeBlackboardText(text);
+        PublishBlackboardTextChanged(force: false);
     }
 
     private void HandleEnvironmentChanged()
     {
-        NotifyEnvironmentChanged();
+        PublishEnvironmentChanged(force: false);
     }
 
     private void HandleStudentHandRaisedChanged()
     {
-        NotifyStudentHandRaisedChanged();
+        PublishStudentHandRaisedChanged(force: false);
     }
 
     private void HandleBlackboardTextChanged()
     {
-        NotifyBlackboardTextChanged();
+        PublishBlackboardTextChanged(force: false);
     }
 
-    private void NotifyEnvironmentChanged()
+    private void PublishEnvironmentChanged(bool force)
     {
+        if (!force && hasPublishedEnvironment && lastPublishedEnvironment == CurrentEnvironment)
+            return;
+
+        hasPublishedEnvironment = true;
+        lastPublishedEnvironment = CurrentEnvironment;
         EnvironmentChanged?.Invoke(CurrentEnvironment);
         onEnvironmentChanged.Invoke(CurrentEnvironment);
     }
 
-    private void NotifyStudentHandRaisedChanged()
+    private void PublishStudentHandRaisedChanged(bool force)
     {
         bool raised = IsStudentHandRaised;
+
+        if (!force && hasPublishedStudentHandRaised && lastPublishedStudentHandRaised == raised)
+            return;
+
+        hasPublishedStudentHandRaised = true;
+        lastPublishedStudentHandRaised = raised;
         StudentHandRaisedChanged?.Invoke(raised);
         onStudentHandRaisedChanged.Invoke(raised);
     }
 
-    private void NotifyBlackboardTextChanged()
+    private void PublishBlackboardTextChanged(bool force)
     {
         string text = BlackboardText.ToString();
+
+        if (!force && hasPublishedBlackboardText && lastPublishedBlackboardText == text)
+            return;
+
+        hasPublishedBlackboardText = true;
+        lastPublishedBlackboardText = text;
         BlackboardTextChanged?.Invoke(text);
         onBlackboardTextChanged.Invoke(text);
+    }
+
+    private static string NormalizeBlackboardText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
+        return text.Length <= BlackboardTextMaxLength
+            ? text
+            : text.Substring(0, BlackboardTextMaxLength);
     }
 }
