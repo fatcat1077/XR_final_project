@@ -6,9 +6,15 @@ using UnityEngine.Events;
 public class ClassroomSessionState : NetworkBehaviour
 {
     private const int BlackboardTextMaxLength = 512;
+    private const float UnchangedVideoTime = -1f;
 
     [Serializable]
     public class ClassroomEnvironmentUnityEvent : UnityEvent<ClassroomEnvironment>
+    {
+    }
+
+    [Serializable]
+    public class VideoPlaybackUnityEvent : UnityEvent<bool, float>
     {
     }
 
@@ -16,6 +22,7 @@ public class ClassroomSessionState : NetworkBehaviour
     [SerializeField] private ClassroomEnvironmentUnityEvent onEnvironmentChanged = new();
     [SerializeField] private UnityEvent<bool> onStudentHandRaisedChanged = new();
     [SerializeField] private UnityEvent<string> onBlackboardTextChanged = new();
+    [SerializeField] private VideoPlaybackUnityEvent onVideoPlaybackChanged = new();
 
     [Networked, OnChangedRender(nameof(HandleEnvironmentChanged))]
     public ClassroomEnvironment CurrentEnvironment { get; private set; }
@@ -26,35 +33,50 @@ public class ClassroomSessionState : NetworkBehaviour
     [Networked, OnChangedRender(nameof(HandleBlackboardTextChanged))]
     public NetworkString<_512> BlackboardText { get; private set; }
 
+    [Networked, OnChangedRender(nameof(HandleVideoPlaybackChanged))]
+    public NetworkBool IsVideoPlaying { get; private set; }
+
+    [Networked, OnChangedRender(nameof(HandleVideoPlaybackChanged))]
+    public float VideoTimeSeconds { get; private set; }
+
     public bool IsStudentHandRaisedValue => IsStudentHandRaised;
     public string BlackboardTextValue => BlackboardText.ToString();
+    public bool IsVideoPlayingValue => IsVideoPlaying;
+    public float VideoTimeSecondsValue => VideoTimeSeconds;
 
     public event Action<ClassroomEnvironment> EnvironmentChanged;
     public event Action<bool> StudentHandRaisedChanged;
     public event Action<string> BlackboardTextChanged;
+    public event Action<bool, float> VideoPlaybackChanged;
 
     public ClassroomEnvironmentUnityEvent OnEnvironmentChanged => onEnvironmentChanged;
     public UnityEvent<bool> OnStudentHandRaisedChanged => onStudentHandRaisedChanged;
     public UnityEvent<string> OnBlackboardTextChanged => onBlackboardTextChanged;
+    public VideoPlaybackUnityEvent OnVideoPlaybackChanged => onVideoPlaybackChanged;
 
     private bool hasPublishedEnvironment;
     private bool hasPublishedStudentHandRaised;
     private bool hasPublishedBlackboardText;
+    private bool hasPublishedVideoPlayback;
     private ClassroomEnvironment lastPublishedEnvironment;
     private bool lastPublishedStudentHandRaised;
     private string lastPublishedBlackboardText = string.Empty;
+    private bool lastPublishedVideoPlaying;
+    private float lastPublishedVideoTimeSeconds;
 
     public override void Spawned()
     {
         PublishEnvironmentChanged(force: true);
         PublishStudentHandRaisedChanged(force: true);
         PublishBlackboardTextChanged(force: true);
+        PublishVideoPlaybackChanged(force: true);
     }
 
     // UI usage:
     // sessionState.RequestSetEnvironment(ClassroomEnvironment.Ocean);
     // sessionState.RequestSetStudentHandRaised(true);
     // sessionState.RequestSetBlackboardText("Welcome to class.");
+    // sessionState.RequestPlayVideo(videoPlayer.time);
     public void RequestSetEnvironment(ClassroomEnvironment environment)
     {
         if (HasStateAuthority)
@@ -98,6 +120,32 @@ public class ClassroomSessionState : NetworkBehaviour
         RequestSetBlackboardText(string.Empty);
     }
 
+    public void RequestSetVideoPlayback(bool isPlaying, float timeSeconds)
+    {
+        if (HasStateAuthority)
+        {
+            SetVideoPlaybackState(isPlaying, timeSeconds);
+            return;
+        }
+
+        RPC_RequestSetVideoPlayback(isPlaying, timeSeconds);
+    }
+
+    public void RequestPlayVideo(float timeSeconds = UnchangedVideoTime)
+    {
+        RequestSetVideoPlayback(true, timeSeconds);
+    }
+
+    public void RequestPauseVideo(float timeSeconds = UnchangedVideoTime)
+    {
+        RequestSetVideoPlayback(false, timeSeconds);
+    }
+
+    public void RequestSeekVideo(float timeSeconds)
+    {
+        RequestSetVideoPlayback(IsVideoPlayingValue, timeSeconds);
+    }
+
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_RequestSetEnvironment(ClassroomEnvironment environment, RpcInfo info = default)
     {
@@ -114,6 +162,12 @@ public class ClassroomSessionState : NetworkBehaviour
     private void RPC_RequestSetBlackboardText(string text, RpcInfo info = default)
     {
         SetBlackboardTextState(text);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_RequestSetVideoPlayback(bool isPlaying, float timeSeconds, RpcInfo info = default)
+    {
+        SetVideoPlaybackState(isPlaying, timeSeconds);
     }
 
     private void SetEnvironmentState(ClassroomEnvironment environment)
@@ -134,6 +188,16 @@ public class ClassroomSessionState : NetworkBehaviour
         PublishBlackboardTextChanged(force: false);
     }
 
+    private void SetVideoPlaybackState(bool isPlaying, float timeSeconds)
+    {
+        IsVideoPlaying = isPlaying;
+
+        if (timeSeconds >= 0f)
+            VideoTimeSeconds = Mathf.Max(0f, timeSeconds);
+
+        PublishVideoPlaybackChanged(force: false);
+    }
+
     private void HandleEnvironmentChanged()
     {
         PublishEnvironmentChanged(force: false);
@@ -147,6 +211,11 @@ public class ClassroomSessionState : NetworkBehaviour
     private void HandleBlackboardTextChanged()
     {
         PublishBlackboardTextChanged(force: false);
+    }
+
+    private void HandleVideoPlaybackChanged()
+    {
+        PublishVideoPlaybackChanged(force: false);
     }
 
     private void PublishEnvironmentChanged(bool force)
@@ -184,6 +253,26 @@ public class ClassroomSessionState : NetworkBehaviour
         lastPublishedBlackboardText = text;
         BlackboardTextChanged?.Invoke(text);
         onBlackboardTextChanged.Invoke(text);
+    }
+
+    private void PublishVideoPlaybackChanged(bool force)
+    {
+        bool isPlaying = IsVideoPlaying;
+        float timeSeconds = VideoTimeSecondsValue;
+
+        if (!force
+            && hasPublishedVideoPlayback
+            && lastPublishedVideoPlaying == isPlaying
+            && Mathf.Approximately(lastPublishedVideoTimeSeconds, timeSeconds))
+        {
+            return;
+        }
+
+        hasPublishedVideoPlayback = true;
+        lastPublishedVideoPlaying = isPlaying;
+        lastPublishedVideoTimeSeconds = timeSeconds;
+        VideoPlaybackChanged?.Invoke(isPlaying, timeSeconds);
+        onVideoPlaybackChanged.Invoke(isPlaying, timeSeconds);
     }
 
     private static string NormalizeBlackboardText(string text)
