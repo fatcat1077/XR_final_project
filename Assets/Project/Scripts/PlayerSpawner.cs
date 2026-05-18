@@ -83,8 +83,10 @@ public class PlayerSpawner : MonoBehaviour, INetworkRunnerCallbacks
             return;
         }
 
-        playerObject.name = $"PlayerAvatar_{player.PlayerId}";
+        string roleName = player == runner.LocalPlayer ? "Teacher" : "Student";
+        playerObject.name = $"{roleName}Avatar_{player.PlayerId}";
         spawnedPlayers[player] = playerObject;
+        runner.SetPlayerObject(player, playerObject);
 
         Debug.Log($"[PlayerSpawner] SUCCESS spawn for {player}");
         Debug.Log($"[PlayerSpawner] spawned object name = {playerObject.name}");

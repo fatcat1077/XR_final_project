@@ -15,30 +15,82 @@ public class EnvironmentManager : NetworkBehaviour
     [SerializeField] private GameObject envOcean;
     [SerializeField] private GameObject envSpace;
 
-    [Networked, OnChangedRender(nameof(OnEnvironmentChanged))]
-    public int CurrentEnvironment { get; set; }
+    [Header("Session State")]
+    [SerializeField] private ClassroomSessionState sessionState;
+
+    private bool subscribed;
 
     public override void Spawned()
     {
-        ApplyEnvironment(CurrentEnvironment);
+        BindSessionState();
+        ApplyEnvironment(GetCurrentEnvironmentIndex());
+    }
+
+    private void Start()
+    {
+        BindSessionState();
+        ApplyEnvironment(GetCurrentEnvironmentIndex());
+    }
+
+    private void Update()
+    {
+        if (!subscribed)
+            BindSessionState();
+    }
+
+    private void OnDestroy()
+    {
+        if (sessionState != null)
+            sessionState.EnvironmentChanged -= HandleEnvironmentChanged;
     }
 
     public void SetEnvironment(EnvironmentType type)
     {
-        if (!HasStateAuthority)
+        BindSessionState();
+
+        if (sessionState == null)
         {
-            Debug.LogWarning("[EnvironmentManager] No StateAuthority, cannot change environment.");
+            Debug.LogWarning("[EnvironmentManager] ClassroomSessionState not found. Applying local environment only.");
+            ApplyEnvironment((int)type);
             return;
         }
 
-        CurrentEnvironment = (int)type;
-        ApplyEnvironment(CurrentEnvironment); // Host 本地先立即更新
-        Debug.Log($"[EnvironmentManager] SetEnvironment -> {type}");
+        if (LocalUserProfile.Role != UserRole.Teacher)
+        {
+            Debug.LogWarning("[EnvironmentManager] Only Teacher can request environment changes.");
+            return;
+        }
+
+        sessionState.RequestSetEnvironment(ToClassroomEnvironment(type));
+        Debug.Log($"[EnvironmentManager] RequestSetEnvironment -> {type}");
     }
 
-    private void OnEnvironmentChanged()
+    private void BindSessionState()
     {
-        ApplyEnvironment(CurrentEnvironment);
+        if (sessionState == null)
+            sessionState = GetComponent<ClassroomSessionState>();
+
+        if (sessionState == null)
+            sessionState = ClassroomSessionState.FindInScene();
+
+        if (sessionState == null || subscribed)
+            return;
+
+        sessionState.EnvironmentChanged += HandleEnvironmentChanged;
+        subscribed = true;
+        ApplyEnvironment((int)sessionState.CurrentEnvironment);
+
+        Debug.Log("[EnvironmentManager] Bound to ClassroomSessionState.");
+    }
+
+    private void HandleEnvironmentChanged(ClassroomEnvironment environment)
+    {
+        ApplyEnvironment((int)environment);
+    }
+
+    private int GetCurrentEnvironmentIndex()
+    {
+        return sessionState != null ? (int)sessionState.CurrentEnvironment : (int)EnvironmentType.Default;
     }
 
     private void ApplyEnvironment(int envIndex)
@@ -53,5 +105,15 @@ public class EnvironmentManager : NetworkBehaviour
             envSpace.SetActive(envIndex == (int)EnvironmentType.Space);
 
         Debug.Log($"[EnvironmentManager] ApplyEnvironment -> {(EnvironmentType)envIndex}");
+    }
+
+    private static ClassroomEnvironment ToClassroomEnvironment(EnvironmentType type)
+    {
+        return type switch
+        {
+            EnvironmentType.Ocean => ClassroomEnvironment.Ocean,
+            EnvironmentType.Space => ClassroomEnvironment.Space,
+            _ => ClassroomEnvironment.Default
+        };
     }
 }
