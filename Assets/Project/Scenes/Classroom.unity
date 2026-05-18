@@ -2112,6 +2112,8 @@ GameObject:
   - component: {fileID: 973272628}
   - component: {fileID: 973272627}
   - component: {fileID: 973272626}
+  - component: {fileID: 973272629}
+  - component: {fileID: 973272630}
   m_Layer: 0
   m_Name: EnvironmentManager
   m_TagString: Untagged
@@ -2134,7 +2136,70 @@ MonoBehaviour:
   envDefault: {fileID: 0}
   envOcean: {fileID: 227411064}
   envSpace: {fileID: 145772687}
-  _CurrentEnvironment: 0
+  sessionState: {fileID: 973272629}
+--- !u!114 &973272629
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 973272625}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4ae20558c13461f4aa1f6fe456c6df32, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  onEnvironmentChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onStudentHandRaisedChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onStudentHandRaisedPlayerChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onBlackboardTextChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onSubtitleSourceChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onBlackboardRevisionChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onVideoPanelVisibleChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onVideoPlayingChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onVideoPlaybackTimeChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onVideoCommandRevisionChanged:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!114 &973272630
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 973272625}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8adf8b08d69449a9f424f693c8a5312, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sessionState: {fileID: 973272629}
+  studentRoot: {fileID: 0}
+  raiseHandButton: {fileID: 0}
+  lowerHandButton: {fileID: 0}
+  studentStatusText: {fileID: 0}
+  teacherRoot: {fileID: 0}
+  clearHandButton: {fileID: 0}
+  teacherStatusText: {fileID: 0}
+  createFallbackUi: 1
 --- !u!114 &973272627
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2153,6 +2218,7 @@ MonoBehaviour:
   NestedObjects: []
   NetworkedBehaviours:
   - {fileID: 973272626}
+  - {fileID: 973272629}
   ForceRemoteRenderTimeframe: 0
 --- !u!4 &973272628
 Transform:

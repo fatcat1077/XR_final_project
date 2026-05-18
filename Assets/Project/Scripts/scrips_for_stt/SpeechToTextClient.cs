@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -10,6 +9,7 @@ public class SpeechToTextClient : MonoBehaviour
     [SerializeField] private string serverUrl = "http://127.0.0.1:5000/stt";
 
     [Header("References")]
+    [SerializeField] private ClassroomSessionState sessionState;
     [SerializeField] private BlackboardManager blackboardManager;
     [SerializeField] private TMP_Text statusText;
 
@@ -23,10 +23,19 @@ public class SpeechToTextClient : MonoBehaviour
         WWWForm form = new WWWForm();
         form.AddBinaryData("file", wavData, "recording.wav", "audio/wav");
 
-        using UnityWebRequest request = UnityWebRequest.Post(serverUrl, form);
+        string resolvedServerUrl = RuntimeNetworkSettings.GetSttServerUrl(serverUrl);
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        if (RuntimeNetworkSettings.IsLoopbackUrl(resolvedServerUrl))
+        {
+            Debug.LogWarning("[SpeechToTextClient] STT server URL uses localhost/127.x on Android. Set it to your PC LAN IP, for example http://192.168.1.23:5000/stt.");
+        }
+#endif
+
+        using UnityWebRequest request = UnityWebRequest.Post(resolvedServerUrl, form);
 
         SetStatus("Sending audio to Whisper server...");
-        Debug.Log($"[SpeechToTextClient] POST -> {serverUrl}");
+        Debug.Log($"[SpeechToTextClient] POST -> {resolvedServerUrl}");
 
         yield return request.SendWebRequest();
 
@@ -51,13 +60,26 @@ public class SpeechToTextClient : MonoBehaviour
 
         SetStatus("Speech recognized");
 
-        if (blackboardManager != null)
+        PublishRecognizedText(response.text);
+    }
+
+    public void PublishRecognizedText(string text)
+    {
+        if (sessionState == null)
+            sessionState = ClassroomSessionState.FindInScene();
+
+        if (sessionState != null)
         {
-            blackboardManager.SetText(response.text);
+            sessionState.RequestSetSpeechToTextCaption(text);
+            Debug.Log($"[SpeechToTextClient] Published STT text through ClassroomSessionState: {text}");
+        }
+        else if (blackboardManager != null)
+        {
+            blackboardManager.SetText(text);
         }
         else
         {
-            Debug.LogError("[SpeechToTextClient] blackboardManager is not assigned.");
+            Debug.LogError("[SpeechToTextClient] No ClassroomSessionState or BlackboardManager is assigned.");
         }
     }
 

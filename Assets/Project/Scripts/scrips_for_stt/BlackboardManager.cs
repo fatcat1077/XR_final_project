@@ -7,46 +7,128 @@ public class BlackboardManager : NetworkBehaviour
     [Header("Blackboard UI")]
     [SerializeField] private TMP_Text subtitleText;
 
-    [Networked, OnChangedRender(nameof(OnSyncedTextChanged))]
-    public NetworkString<_512> SyncedText { get; set; }
+    [Header("Session State")]
+    [SerializeField] private ClassroomSessionState sessionState;
+
+    private bool subscribed;
+    private string lastAppliedText = string.Empty;
 
     public override void Spawned()
     {
-        ApplyText();
+        BindSessionState();
+        ApplyText(GetCurrentText());
+    }
+
+    private void Start()
+    {
+        BindSessionState();
+        ApplyText(GetCurrentText());
+    }
+
+    private void Update()
+    {
+        if (!subscribed)
+            BindSessionState();
+    }
+
+    private void OnDestroy()
+    {
+        if (sessionState != null)
+            sessionState.BlackboardChanged -= HandleBlackboardChanged;
     }
 
     public void SetText(string newText)
     {
-        if (!HasStateAuthority)
+        BindSessionState();
+
+        if (sessionState != null)
         {
-            Debug.LogWarning("[BlackboardManager] No StateAuthority. Cannot set text.");
+            sessionState.RequestSetSpeechToTextCaption(newText);
+            Debug.Log($"[BlackboardManager] RequestSetSpeechToTextCaption = {newText}");
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(newText))
-            newText = "(No speech recognized)";
-
-        SyncedText = newText;
-        ApplyText();
-
-        Debug.Log($"[BlackboardManager] SetText = {newText}");
+        ApplyText(NormalizeFallbackText(newText));
+        Debug.LogWarning("[BlackboardManager] ClassroomSessionState not found. Applied text locally only.");
     }
 
-    private void OnSyncedTextChanged()
+    public void SetManualText(string newText)
     {
-        ApplyText();
+        BindSessionState();
+
+        if (sessionState != null)
+        {
+            sessionState.RequestSetBlackboardText(newText);
+            return;
+        }
+
+        ApplyText(NormalizeFallbackText(newText));
     }
 
-    private void ApplyText()
+    public void ClearText()
     {
+        BindSessionState();
+
+        if (sessionState != null)
+        {
+            sessionState.RequestClearBlackboard();
+            return;
+        }
+
+        ApplyText(string.Empty);
+    }
+
+    private void BindSessionState()
+    {
+        if (sessionState == null)
+            sessionState = GetComponent<ClassroomSessionState>();
+
+        if (sessionState == null)
+            sessionState = ClassroomSessionState.FindInScene();
+
+        if (sessionState == null || subscribed)
+            return;
+
+        sessionState.BlackboardChanged += HandleBlackboardChanged;
+        subscribed = true;
+        ApplyText(sessionState.BlackboardTextValue);
+
+        Debug.Log("[BlackboardManager] Bound to ClassroomSessionState.");
+    }
+
+    private void HandleBlackboardChanged(string text, ClassroomSubtitleSource source, int revision)
+    {
+        ApplyText(text);
+        Debug.Log($"[BlackboardManager] Blackboard changed. source={source}, revision={revision}");
+    }
+
+    private string GetCurrentText()
+    {
+        return sessionState != null ? sessionState.BlackboardTextValue : lastAppliedText;
+    }
+
+    private void ApplyText(string text)
+    {
+        string normalizedText = NormalizeFallbackText(text);
+
+        if (lastAppliedText == normalizedText)
+            return;
+
+        lastAppliedText = normalizedText;
+
         if (subtitleText != null)
         {
-            subtitleText.text = SyncedText.ToString();
+            subtitleText.text = normalizedText;
             Debug.Log($"[BlackboardManager] ApplyText -> {subtitleText.text}");
         }
         else
         {
             Debug.LogWarning("[BlackboardManager] subtitleText is not assigned.");
         }
+    }
+
+    private static string NormalizeFallbackText(string text)
+    {
+        return string.IsNullOrWhiteSpace(text) ? string.Empty : text.Trim();
     }
 }

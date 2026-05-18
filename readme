@@ -1,0 +1,1 @@
+- remember to use `winget install Gyan.FFmpeg`  to download ffmpeg for STT. Please install packages in requirements.txt.
