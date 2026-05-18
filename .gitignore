@@ -24,3 +24,7 @@ UserSettings/
 *.mdb
 *.opendb
 *.VC.db
+*venv
+
+# big files
+Assets/Real Stars Skybox/

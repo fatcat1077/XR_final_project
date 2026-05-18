@@ -14,4 +14,10 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Project/Scenes/Classroom.unity
     guid: a835bae7cb9c0d044a7c87f1928f9a2f
+  - enabled: 1
+    path: Assets/Scenes/Test_lobby.unity
+    guid: 4423fd2d6604ee24985fe317b0118dc8
+  - enabled: 1
+    path: Assets/Scenes/Test_classroom.unity
+    guid: 601170c671e984e41bf57b2f1b9b45fd
   m_configObjects: {}
