@@ -40,6 +40,17 @@ public class ClassroomSessionState : NetworkBehaviour
     private ClassroomEnvironment lastPublishedEnvironment;
     private bool lastPublishedStudentHandRaised;
     private string lastPublishedBlackboardText = string.Empty;
+    public static ClassroomSessionState Instance;
+
+    void Awake()
+    {
+        if(Instance == null)
+            Instance = this;
+        else
+        {
+            Destroy(gameObject);
+        }        
+    }
 
     public override void Spawned()
     {
