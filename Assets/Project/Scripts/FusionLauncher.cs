@@ -25,6 +25,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
     [Header("Scene Settings")]
     [SerializeField] private int classroomSceneBuildIndex = 1;
+    [SerializeField] private string classroomScenePath = "Assets/Project/Scenes/Classroom.unity";
 
     [Header("Photon Region (set same value in PhotonAppSettings.asset)")]
     [SerializeField] private string fixedRegion = "hk";
@@ -37,6 +38,12 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
     [SerializeField] private int clientJoinRetryCount = 5;
     [SerializeField] private float clientJoinRetryDelaySeconds = 1f;
 
+    [Header("Quest Auto Start")]
+    [SerializeField] private bool autoStartStudentClientOnAndroid;
+    [SerializeField] private float androidAutoStartDelaySeconds = 1f;
+    [SerializeField] private int androidAutoStartRetryCount = 30;
+    [SerializeField] private float androidAutoStartRetryDelaySeconds = 2f;
+
     private NetworkRunner runner;
     private bool isStartingGame = false;
 
@@ -48,6 +55,35 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         if (statusText != null)
             statusText.text = "Ready";
     }
+
+    private void Start()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        _ = AutoStartStudentClientOnAndroidAsync();
+#endif
+    }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+    private async Task AutoStartStudentClientOnAndroidAsync()
+    {
+        if (!autoStartStudentClientOnAndroid)
+            return;
+
+        clientJoinRetryCount = Mathf.Max(clientJoinRetryCount, androidAutoStartRetryCount);
+        clientJoinRetryDelaySeconds = Mathf.Max(0.1f, androidAutoStartRetryDelaySeconds);
+
+        SetStatus($"Quest auto-join: {GetRoomName()}");
+        Debug.Log($"[FusionLauncher] Android auto-start enabled. Delay={androidAutoStartDelaySeconds}s, retries={clientJoinRetryCount}, retryDelay={clientJoinRetryDelaySeconds}s");
+
+        await Task.Delay(TimeSpan.FromSeconds(Mathf.Max(0f, androidAutoStartDelaySeconds)));
+
+        if (!this || !isActiveAndEnabled || isStartingGame)
+            return;
+
+        Debug.Log("[FusionLauncher] Android/Quest auto-start as Student Client.");
+        StartAsStudentClient();
+    }
+#endif
 
     public async void StartAsTeacherHost()
     {
@@ -141,6 +177,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         Debug.Log($"[FusionLauncher] Role = {LocalUserProfile.Role}");
         Debug.Log($"[FusionLauncher] RoomName = {LocalUserProfile.RoomName}");
         Debug.Log($"[FusionLauncher] classroomSceneBuildIndex = {classroomSceneBuildIndex}");
+        Debug.Log($"[FusionLauncher] classroomScenePath = {classroomScenePath}");
         Debug.Log($"[FusionLauncher] Expected Fixed Region (set manually in PhotonAppSettings.asset) = {fixedRegion}");
 
         StartGameResult failedResult;
@@ -154,17 +191,19 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
             return failedResult;
         }
 
-        if (!IsSceneBuildIndexValid(classroomSceneBuildIndex))
+        int resolvedClassroomSceneBuildIndex = ResolveClassroomSceneBuildIndex();
+
+        if (!IsSceneBuildIndexValid(resolvedClassroomSceneBuildIndex))
         {
             SetStatus("Start failed: Invalid Scene Index");
-            Debug.LogError($"[FusionLauncher] Invalid scene build index: {classroomSceneBuildIndex}");
+            Debug.LogError($"[FusionLauncher] Invalid scene build index: {resolvedClassroomSceneBuildIndex}. Configured fallback index={classroomSceneBuildIndex}, scenePath={classroomScenePath}");
             isStartingGame = false;
             failedResult = default;
             return failedResult;
         }
 
-        string scenePath = SceneUtility.GetScenePathByBuildIndex(classroomSceneBuildIndex);
-        Debug.Log($"[FusionLauncher] Scene path for build index {classroomSceneBuildIndex} = {scenePath}");
+        string scenePath = SceneUtility.GetScenePathByBuildIndex(resolvedClassroomSceneBuildIndex);
+        Debug.Log($"[FusionLauncher] Scene path for build index {resolvedClassroomSceneBuildIndex} = {scenePath}");
 
         isStartingGame = true;
         SetStatus($"Starting as {mode}...");
@@ -235,11 +274,11 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         }
 
         var sceneInfo = new NetworkSceneInfo();
-        sceneInfo.AddSceneRef(SceneRef.FromIndex(classroomSceneBuildIndex), LoadSceneMode.Single);
+        sceneInfo.AddSceneRef(SceneRef.FromIndex(resolvedClassroomSceneBuildIndex), LoadSceneMode.Single);
 
         Debug.Log($"[FusionLauncher] StartGame with RoomName = {LocalUserProfile.RoomName}");
         Debug.Log($"[FusionLauncher] StartGame with Region = {fixedRegion} (must match PhotonAppSettings.asset)");
-        Debug.Log($"[FusionLauncher] NetworkSceneInfo created with SceneRef.FromIndex({classroomSceneBuildIndex}) and LoadSceneMode.Single");
+        Debug.Log($"[FusionLauncher] NetworkSceneInfo created with SceneRef.FromIndex({resolvedClassroomSceneBuildIndex}) and LoadSceneMode.Single");
 
         StartGameResult result;
 
@@ -276,39 +315,8 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
             Debug.Log($"[FusionLauncher] StartGame SUCCESS. Mode = {mode}, Room = {LocalUserProfile.RoomName}");
 
             TryLogSessionInfo(runner, "[FusionLauncher] SessionInfo after StartGame SUCCESS");
-
-            if (lobbyCanvas != null)
-            {
-                lobbyCanvas.SetActive(false);
-                Debug.Log("[FusionLauncher] Lobby Canvas hidden.");
-            }
-            else
-            {
-                Debug.LogWarning("[FusionLauncher] lobbyCanvas is not assigned.");
-            }
-
-            if (lobbyEventSystem != null)
-            {
-                lobbyEventSystem.SetActive(false);
-                Debug.Log("[FusionLauncher] Lobby EventSystem hidden.");
-            }
-            else
-            {
-                Debug.LogWarning("[FusionLauncher] lobbyEventSystem is not assigned.");
-            }
-
-            if (lobbyCamera != null)
-            {
-                lobbyCamera.gameObject.SetActive(false);
-                Debug.Log("[FusionLauncher] Lobby Camera disabled.");
-            }
-            else
-            {
-                Debug.LogWarning("[FusionLauncher] lobbyCamera is not assigned.");
-            }
-
-            gameObject.SetActive(false);
-            Debug.Log("[FusionLauncher] FusionLauncherObject disabled.");
+            HideLobbyUiOnly("StartGame success");
+            Debug.Log("[FusionLauncher] Waiting for scene load before hiding Lobby camera/UI.");
         }
         else
         {
@@ -363,6 +371,116 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         return !string.IsNullOrEmpty(path);
     }
 
+    private int ResolveClassroomSceneBuildIndex()
+    {
+        if (!string.IsNullOrWhiteSpace(classroomScenePath))
+        {
+            string expectedPath = classroomScenePath.Replace('\\', '/');
+
+            for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+            {
+                string path = SceneUtility.GetScenePathByBuildIndex(i).Replace('\\', '/');
+
+                if (string.Equals(path, expectedPath, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+
+            Debug.LogWarning($"[FusionLauncher] Classroom scene path not found in Build Settings: {expectedPath}. Falling back to index {classroomSceneBuildIndex}.");
+        }
+
+        return classroomSceneBuildIndex;
+    }
+
+    private void HideLobbyObjectsAfterSceneLoad()
+    {
+        if (!IsClassroomSceneLoaded())
+        {
+            Debug.LogWarning("[FusionLauncher] Scene load callback fired, but Classroom is not loaded yet. Keeping Lobby camera/UI active.");
+            return;
+        }
+
+        HideLobbyUiOnly("Classroom scene loaded");
+
+        if (lobbyCanvas != null)
+        {
+            lobbyCanvas.SetActive(false);
+            Debug.Log("[FusionLauncher] Lobby Canvas hidden after scene load.");
+        }
+        else
+        {
+            Debug.LogWarning("[FusionLauncher] lobbyCanvas is not assigned.");
+        }
+
+        if (lobbyEventSystem != null)
+        {
+            lobbyEventSystem.SetActive(false);
+            Debug.Log("[FusionLauncher] Lobby EventSystem hidden after scene load.");
+        }
+        else
+        {
+            Debug.LogWarning("[FusionLauncher] lobbyEventSystem is not assigned.");
+        }
+
+        if (lobbyCamera != null)
+        {
+            lobbyCamera.gameObject.SetActive(false);
+            Debug.Log("[FusionLauncher] Lobby Camera disabled after scene load.");
+        }
+        else
+        {
+            Debug.LogWarning("[FusionLauncher] lobbyCamera is not assigned.");
+        }
+
+        gameObject.SetActive(false);
+        Debug.Log("[FusionLauncher] FusionLauncherObject disabled after scene load.");
+    }
+
+    private void HideLobbyUiOnly(string reason)
+    {
+        QuestLobbyPointer questLobbyPointer = GetComponent<QuestLobbyPointer>();
+
+        if (questLobbyPointer != null)
+            questLobbyPointer.HideLobbyUi(reason);
+
+        if (lobbyCanvas != null)
+        {
+            lobbyCanvas.SetActive(false);
+            Debug.Log($"[FusionLauncher] Lobby Canvas hidden. Reason: {reason}");
+        }
+
+        if (lobbyEventSystem != null)
+        {
+            lobbyEventSystem.SetActive(false);
+            Debug.Log($"[FusionLauncher] Lobby EventSystem hidden. Reason: {reason}");
+        }
+    }
+
+    private bool IsClassroomSceneLoaded()
+    {
+        string expectedPath = string.IsNullOrWhiteSpace(classroomScenePath)
+            ? string.Empty
+            : classroomScenePath.Replace('\\', '/');
+
+        for (int i = 0; i < SceneManager.sceneCount; i++)
+        {
+            Scene scene = SceneManager.GetSceneAt(i);
+
+            if (!scene.isLoaded)
+                continue;
+
+            string scenePath = scene.path.Replace('\\', '/');
+
+            if (!string.IsNullOrWhiteSpace(expectedPath) &&
+                string.Equals(scenePath, expectedPath, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (string.Equals(scene.name, "Classroom", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
     private void DebugLogCurrentConfig()
     {
         Debug.Log("--------------- FusionLauncher Config ---------------");
@@ -371,11 +489,17 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         Debug.Log($"[FusionLauncher] lobbyEventSystem assigned = {lobbyEventSystem != null}");
         Debug.Log($"[FusionLauncher] lobbyCamera assigned = {lobbyCamera != null}");
         Debug.Log($"[FusionLauncher] classroomSceneBuildIndex = {classroomSceneBuildIndex}");
+        Debug.Log($"[FusionLauncher] classroomScenePath = {classroomScenePath}");
+        Debug.Log($"[FusionLauncher] resolvedClassroomSceneBuildIndex = {ResolveClassroomSceneBuildIndex()}");
         Debug.Log($"[FusionLauncher] fixedRegion (manual) = {fixedRegion}");
         Debug.Log($"[FusionLauncher] useFixedRoomName = {useFixedRoomName}");
         Debug.Log($"[FusionLauncher] fixedRoomName = {fixedRoomName}");
         Debug.Log($"[FusionLauncher] clientJoinRetryCount = {clientJoinRetryCount}");
         Debug.Log($"[FusionLauncher] clientJoinRetryDelaySeconds = {clientJoinRetryDelaySeconds}");
+        Debug.Log($"[FusionLauncher] autoStartStudentClientOnAndroid = {autoStartStudentClientOnAndroid}");
+        Debug.Log($"[FusionLauncher] androidAutoStartDelaySeconds = {androidAutoStartDelaySeconds}");
+        Debug.Log($"[FusionLauncher] androidAutoStartRetryCount = {androidAutoStartRetryCount}");
+        Debug.Log($"[FusionLauncher] androidAutoStartRetryDelaySeconds = {androidAutoStartRetryDelaySeconds}");
         Debug.Log($"[FusionLauncher] sceneCountInBuildSettings = {SceneManager.sceneCountInBuildSettings}");
 
         for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
@@ -487,10 +611,13 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         {
             Debug.Log($"[FusionLauncher] Camera = {cam.gameObject.name}, active={cam.gameObject.activeInHierarchy}");
         }
+
+        HideLobbyObjectsAfterSceneLoad();
     }
 
     public void OnSceneLoadStart(NetworkRunner runner)
     {
         Debug.Log("[FusionLauncher] OnSceneLoadStart");
+        HideLobbyUiOnly("Scene load start");
     }
 }

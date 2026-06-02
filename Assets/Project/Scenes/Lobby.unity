@@ -158,8 +158,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 160, y: 30}
+  m_AnchoredPosition: {x: -260, y: -45}
+  m_SizeDelta: {x: 420, y: 112}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &124920185
 MonoBehaviour:
@@ -291,8 +291,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -200, y: 0}
-  m_SizeDelta: {x: 160, y: 30}
+  m_AnchoredPosition: {x: 260, y: -45}
+  m_SizeDelta: {x: 420, y: 112}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &300903699
 MonoBehaviour:
@@ -494,7 +494,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_IgnoreReversedGraphics: 1
+  m_IgnoreReversedGraphics: 0
   m_BlockingObjects: 0
   m_BlockingMask:
     serializedVersion: 2
@@ -581,8 +581,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -60}
-  m_SizeDelta: {x: 160, y: 30}
+  m_AnchoredPosition: {x: 0, y: -185}
+  m_SizeDelta: {x: 640, y: 88}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &618312714
 MonoBehaviour:
@@ -679,7 +679,7 @@ MonoBehaviour:
   m_HideSoftKeyboard: 0
   m_CharacterValidation: 0
   m_RegexValue: 
-  m_GlobalPointSize: 14
+  m_GlobalPointSize: 34
   m_CharacterLimit: 0
   m_OnEndEdit:
     m_PersistentCalls:
@@ -1084,8 +1084,8 @@ Camera:
     y: 0
     width: 1
     height: 1
-  near clip plane: 0.3
-  far clip plane: 1000
+  near clip plane: 0.05
+  far clip plane: 100
   field of view: 60
   orthographic: 0
   orthographic size: 5
@@ -1113,7 +1113,7 @@ Transform:
   m_GameObject: {fileID: 1074819681}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalPosition: {x: 0, y: 1.6, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1271,8 +1271,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 24
-  m_fontSizeBase: 24
+  m_fontSize: 48
+  m_fontSizeBase: 48
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1331,6 +1331,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1318422425}
   - component: {fileID: 1318422424}
+  - component: {fileID: 1318422426}
   m_Layer: 0
   m_Name: FusionLauncherObject
   m_TagString: Untagged
@@ -1357,11 +1358,60 @@ MonoBehaviour:
   lobbyCamera: {fileID: 1074819683}
   runnerPrefab: {fileID: 7862100195032524363, guid: 2eece4c0efbdd454ab3a9c169642080c, type: 3}
   classroomSceneBuildIndex: 1
+  classroomScenePath: Assets/Project/Scenes/Classroom.unity
   fixedRegion: hk
   useFixedRoomName: 1
   fixedRoomName: XRRoom01_voice
   clientJoinRetryCount: 5
   clientJoinRetryDelaySeconds: 3
+  autoStartStudentClientOnAndroid: 0
+  androidAutoStartDelaySeconds: 1
+  androidAutoStartRetryCount: 30
+  androidAutoStartRetryDelaySeconds: 2
+--- !u!114 &1318422426
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1318422423}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8aa8e3a02dbd46b4939b4c88481a9e21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  lobbyCanvas: {fileID: 582310822}
+  lobbyCamera: {fileID: 1074819683}
+  enableInEditor: 0
+  worldCanvasSize: {x: 1200, y: 720}
+  worldCanvasScale: 0.0025
+  canvasDistance: 2
+  canvasHeightOffset: -0.12
+  keepCanvasCenteredOnView: 0
+  recenterSettleFrames: 3
+  buttonSize: {x: 420, y: 112}
+  serverButtonPosition: {x: -260, y: -45}
+  clientButtonPosition: {x: 260, y: -45}
+  roomInputSize: {x: 640, y: 88}
+  roomInputPosition: {x: 0, y: -185}
+  statusSize: {x: 980, y: 108}
+  statusPosition: {x: 0, y: 150}
+  buttonFontSize: 48
+  inputFontSize: 34
+  statusFontSize: 44
+  pointerHand: 5
+  rayLength: 5
+  triggerThreshold: 0.65
+  pointerPositionOffset: {x: 0, y: 0, z: 0}
+  pointerRotationOffsetEuler: {x: 0, y: 0, z: 0}
+  rayStartWidth: 0.018
+  rayEndWidth: 0.006
+  reticleSize: 0.07
+  fallbackToHeadGaze: 1
+  showControllerVisual: 1
+  controllerVisualPositionOffset: {x: 0, y: -0.02, z: 0.05}
+  controllerVisualRotationOffsetEuler: {x: 0, y: 0, z: 0}
+  controllerBodySize: {x: 0.08, y: 0.06, z: 0.16}
 --- !u!4 &1318422425
 Transform:
   m_ObjectHideFlags: 0
@@ -1461,8 +1511,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 14
-  m_fontSizeBase: 14
+  m_fontSize: 34
+  m_fontSizeBase: 34
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1576,8 +1626,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 44
+  m_fontSizeBase: 44
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1642,8 +1692,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 60}
-  m_SizeDelta: {x: 200, y: 50}
+  m_AnchoredPosition: {x: 0, y: 150}
+  m_SizeDelta: {x: 980, y: 108}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1996071252
 GameObject:
@@ -1729,8 +1779,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 24
-  m_fontSizeBase: 24
+  m_fontSize: 48
+  m_fontSizeBase: 48
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 0
@@ -1884,8 +1934,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 14
-  m_fontSizeBase: 14
+  m_fontSize: 34
+  m_fontSizeBase: 34
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
