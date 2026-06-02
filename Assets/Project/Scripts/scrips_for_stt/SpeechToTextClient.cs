@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -23,10 +22,19 @@ public class SpeechToTextClient : MonoBehaviour
         WWWForm form = new WWWForm();
         form.AddBinaryData("file", wavData, "recording.wav", "audio/wav");
 
-        using UnityWebRequest request = UnityWebRequest.Post(serverUrl, form);
+        string resolvedServerUrl = RuntimeNetworkSettings.GetSttServerUrl(serverUrl);
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        if (RuntimeNetworkSettings.IsLoopbackUrl(resolvedServerUrl))
+        {
+            Debug.LogWarning("[SpeechToTextClient] STT server URL uses localhost/127.x on Quest. Set it to the PC LAN IP, for example http://192.168.1.23:5000/stt.");
+        }
+#endif
+
+        using UnityWebRequest request = UnityWebRequest.Post(resolvedServerUrl, form);
 
         SetStatus("Sending audio to Whisper server...");
-        Debug.Log($"[SpeechToTextClient] POST -> {serverUrl}");
+        Debug.Log($"[SpeechToTextClient] POST -> {resolvedServerUrl}");
 
         yield return request.SendWebRequest();
 
