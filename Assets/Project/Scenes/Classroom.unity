@@ -1337,7 +1337,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ae6ee5a3419587b4ca90cc82a6b70fda, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  serverUrl: http://127.0.0.1:5000/stt
+  serverUrl: http://192.168.0.102:5000/stt
   blackboardManager: {fileID: 1429777790}
   statusText: {fileID: 1427237193}
 --- !u!114 &722154980

@@ -47,7 +47,7 @@ public class VoiceSetup : NetworkBehaviour
         if (speakerAudioSource != null)
         {
             speakerAudioSource.playOnAwake = false;
-            //speakerAudioSource.mute = isLocalPlayer;
+            speakerAudioSource.mute = isLocalPlayer;
             speakerAudioSource.spatialBlend = 0f;
 
             Debug.Log($"[VoiceSetup] audioSource.mute = {speakerAudioSource.mute}");
@@ -56,8 +56,8 @@ public class VoiceSetup : NetworkBehaviour
 
         if (speaker != null)
         {
-            speaker.enabled = true;
-            Debug.Log("[VoiceSetup] speaker.enabled = true");
+            speaker.enabled = !isLocalPlayer;
+            Debug.Log($"[VoiceSetup] speaker.enabled = {speaker.enabled}");
         }
 
         Debug.Log(isLocalPlayer
