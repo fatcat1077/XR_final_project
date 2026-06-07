@@ -1523,11 +1523,16 @@ MonoBehaviour:
   lobbyCamera: {fileID: 1074819683}
   runnerPrefab: {fileID: 7862100195032524363, guid: 2eece4c0efbdd454ab3a9c169642080c, type: 3}
   classroomSceneBuildIndex: 3
+  classroomScenePath: Assets/Scenes/Test_classroom
   fixedRegion: hk
   useFixedRoomName: 1
   fixedRoomName: XRRoom01_voice
   clientJoinRetryCount: 5
   clientJoinRetryDelaySeconds: 3
+  autoStartStudentClientOnAndroid: 0
+  androidAutoStartDelaySeconds: 1
+  androidAutoStartRetryCount: 30
+  androidAutoStartRetryDelaySeconds: 2
 --- !u!4 &1318422425
 Transform:
   m_ObjectHideFlags: 0

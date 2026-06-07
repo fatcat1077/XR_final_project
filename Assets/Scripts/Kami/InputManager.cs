@@ -87,7 +87,6 @@ public class InputManager : MonoBehaviour
                 Debug.LogWarning("ClassroomSessionState 還沒準備好！");
             }
         }
-        /* wait for classroom implement
         // show video panel
         else if(Input.GetKeyDown(KeyCode.Alpha6))
         {
@@ -99,6 +98,7 @@ public class InputManager : MonoBehaviour
             var sessionState = FindObjectOfType<ClassroomSessionState>();
             if (sessionState != null && sessionState.Object != null && sessionState.Object.IsValid) {
                 Debug.Log("show video panel");
+                sessionState.RequestSetVideoPanelVisible(true);
             } else {
                 Debug.LogWarning("ClassroomSessionState 還沒準備好！");
             }
@@ -114,6 +114,7 @@ public class InputManager : MonoBehaviour
             var sessionState = FindObjectOfType<ClassroomSessionState>();
             if (sessionState != null && sessionState.Object != null && sessionState.Object.IsValid) {
                 Debug.Log("close video panel");
+                sessionState.RequestSetVideoPanelVisible(false);
             } else {
                 Debug.LogWarning("ClassroomSessionState 還沒準備好！");
             }
@@ -129,11 +130,12 @@ public class InputManager : MonoBehaviour
             var sessionState = FindObjectOfType<ClassroomSessionState>();
             if (sessionState != null && sessionState.Object != null && sessionState.Object.IsValid) {
                 Debug.Log("play video");
+                sessionState.RequestSetVideoPlaying(true);
             } else {
                 Debug.LogWarning("ClassroomSessionState 還沒準備好！");
             }
         }
-        // play video
+        // pause video
         else if(Input.GetKeyDown(KeyCode.Alpha9))
         {
             if (LocalUserProfile.Role != UserRole.Teacher) {
@@ -144,11 +146,11 @@ public class InputManager : MonoBehaviour
             var sessionState = FindObjectOfType<ClassroomSessionState>();
             if (sessionState != null && sessionState.Object != null && sessionState.Object.IsValid) {
                 Debug.Log("stop video");
+                sessionState.RequestSetVideoPlaying(false);
             } else {
                 Debug.LogWarning("ClassroomSessionState 還沒準備好！");
             }
         }
-        */
 
     }
 }
