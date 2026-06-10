@@ -562,26 +562,37 @@ public sealed class EnvironmentContentManager : MonoBehaviour
             CreateQuad($"Bubble_{i:00}", overlay, new Vector3(x, y, z), new Vector2(size, size), bubbleMaterial);
         }
 
-        Color[] fishColors =
+        GameObject[] oceanAnimalPrefabs = GetOceanAnimalPrefabs(gameObject.scene);
+        bool createdPrefabFishSchool = CreateOceanPrefabFishSchool(overlay, oceanAnimalPrefabs);
+        if (!createdPrefabFishSchool)
         {
-            new Color(0.25f, 0.88f, 1f, 1f),
-            new Color(0.95f, 0.68f, 0.28f, 1f),
-            new Color(0.98f, 0.88f, 0.42f, 1f),
-            new Color(0.45f, 0.75f, 1f, 1f)
-        };
+            Color[] fishColors =
+            {
+                new Color(0.25f, 0.88f, 1f, 1f),
+                new Color(0.95f, 0.68f, 0.28f, 1f),
+                new Color(0.98f, 0.88f, 0.42f, 1f),
+                new Color(0.45f, 0.75f, 1f, 1f)
+            };
 
-        for (int i = 0; i < 22; i++)
-        {
-            Vector3 basePosition = new Vector3(
-                Mathf.Lerp(-9.2f, 9.2f, Halton(i + 3, 2)),
-                Mathf.Lerp(-2.7f, 2.5f, Halton(i + 6, 3)),
-                Mathf.Lerp(4.5f, 10.5f, Halton(i + 9, 5)));
+            for (int i = 0; i < 22; i++)
+            {
+                Vector3 basePosition = new Vector3(
+                    Mathf.Lerp(-9.2f, 9.2f, Halton(i + 3, 2)),
+                    Mathf.Lerp(-2.7f, 2.5f, Halton(i + 6, 3)),
+                    Mathf.Lerp(4.5f, 10.5f, Halton(i + 9, 5)));
 
-            CreateFish(overlay, $"OceanFish_{i:00}", basePosition, Mathf.Lerp(0.2f, 0.48f, Halton(i + 4, 7)), fishColors[i % fishColors.Length]);
+                CreateFish(overlay, $"OceanFish_{i:00}", basePosition, Mathf.Lerp(0.2f, 0.48f, Halton(i + 4, 7)), fishColors[i % fishColors.Length]);
+            }
         }
 
-        CreateLargeFish(overlay, "LargeFish_LeftPass", true, 0f, 1.75f, 4.7f, 0.85f);
-        CreateLargeFish(overlay, "LargeFish_RightPass", false, 4.2f, 1.45f, 6.1f, -0.35f);
+        bool createdPrefabLargeFish = CreateOceanPrefabBigFishPasses(overlay, oceanAnimalPrefabs);
+        if (!createdPrefabLargeFish)
+        {
+            CreateLargeFish(overlay, "LargeFish_LeftPass", true, 0f, 1.75f, 4.7f, 0.85f);
+            CreateLargeFish(overlay, "LargeFish_RightPass", false, 4.2f, 1.45f, 6.1f, -0.35f);
+        }
+
+        Debug.Log($"[EnvironmentContentManager] Ocean visuals built. prefabAnimals={oceanAnimalPrefabs.Length}, prefabSchool={createdPrefabFishSchool}, prefabLargeFish={createdPrefabLargeFish}");
     }
 
     private void BuildSpaceEnvironment(Camera displayCamera)
@@ -733,6 +744,214 @@ public sealed class EnvironmentContentManager : MonoBehaviour
         MeshRenderer tailRenderer = tail.AddComponent<MeshRenderer>();
         tailFilter.sharedMesh = CreateTriangleMesh();
         tailRenderer.sharedMaterial = finMaterial;
+    }
+
+    private static GameObject[] GetOceanAnimalPrefabs(Scene scene)
+    {
+        GameObject summonObject = FindSceneObject(scene, "Summon");
+        if (summonObject == null)
+            return System.Array.Empty<GameObject>();
+
+        SummonAnimal summonAnimal = summonObject.GetComponent<SummonAnimal>();
+        if (summonAnimal == null || summonAnimal.animals == null || summonAnimal.animals.Length == 0)
+            return System.Array.Empty<GameObject>();
+
+        List<GameObject> prefabs = new List<GameObject>();
+        for (int i = 0; i < summonAnimal.animals.Length; i++)
+        {
+            GameObject prefab = summonAnimal.animals[i];
+            if (prefab != null && !prefabs.Contains(prefab))
+                prefabs.Add(prefab);
+        }
+
+        return prefabs.ToArray();
+    }
+
+    private static bool CreateOceanPrefabFishSchool(Transform parent, GameObject[] prefabs)
+    {
+        if (prefabs == null || prefabs.Length == 0)
+            return false;
+
+        int created = 0;
+        for (int i = 0; i < 12; i++)
+        {
+            GameObject prefab = ChooseOceanAnimalPrefab(prefabs, i, preferLargeFish: false);
+            if (prefab == null)
+                continue;
+
+            Vector3 basePosition = new Vector3(
+                Mathf.Lerp(-5.8f, 5.8f, Halton(i + 2, 2)),
+                Mathf.Lerp(-2.0f, 2.1f, Halton(i + 5, 3)),
+                Mathf.Lerp(6.2f, 12.4f, Halton(i + 7, 5)));
+
+            float scale = Mathf.Lerp(0.45f, 0.9f, Halton(i + 3, 7));
+            float speed = Mathf.Lerp(0.35f, 0.85f, Halton(i + 4, 11));
+            float width = Mathf.Lerp(0.55f, 1.6f, Halton(i + 6, 13));
+            float height = Mathf.Lerp(0.06f, 0.24f, Halton(i + 8, 17));
+            float phase = Mathf.Lerp(0f, Mathf.PI * 2f, Halton(i + 9, 19));
+
+            GameObject fish = InstantiateOceanPrefabFish(prefab, parent, $"OceanPrefabFish_{i:00}", basePosition, scale);
+            if (fish == null)
+                continue;
+
+            fish.AddComponent<RuntimePrefabFishSwim>().Initialize(basePosition, speed, width, height, phase);
+            created++;
+        }
+
+        return created > 0;
+    }
+
+    private static bool CreateOceanPrefabBigFishPasses(Transform parent, GameObject[] prefabs)
+    {
+        if (prefabs == null || prefabs.Length == 0)
+            return false;
+
+        int created = 0;
+        if (CreateOceanPrefabBigFish(parent, prefabs, "OceanPrefabBigFish_LeftPass", true, 0f, 1.72f, 5.2f, 0.85f, 0))
+            created++;
+
+        if (CreateOceanPrefabBigFish(parent, prefabs, "OceanPrefabBigFish_RightPass", false, 4.4f, 1.55f, 6.6f, -0.25f, 1))
+            created++;
+
+        if (CreateOceanPrefabBigFish(parent, prefabs, "OceanPrefabBigFish_ClosePass", true, 8.1f, 2.05f, 4.3f, 0.2f, 2))
+            created++;
+
+        return created > 0;
+    }
+
+    private static bool CreateOceanPrefabBigFish(Transform parent, GameObject[] prefabs, string name, bool leftToRight, float phase, float scale, float depth, float height, int variant)
+    {
+        GameObject prefab = ChooseOceanAnimalPrefab(prefabs, variant, preferLargeFish: true);
+        if (prefab == null)
+            return false;
+
+        GameObject fish = InstantiateOceanPrefabFish(prefab, parent, name, Vector3.zero, scale);
+        if (fish == null)
+            return false;
+
+        fish.AddComponent<RuntimePrefabFishPass>().Initialize(leftToRight, phase, depth, height);
+        return true;
+    }
+
+    private static GameObject InstantiateOceanPrefabFish(GameObject prefab, Transform parent, string name, Vector3 localPosition, float scale)
+    {
+        if (prefab == null || parent == null)
+            return null;
+
+        GameObject fish = Instantiate(prefab, parent, false);
+        fish.name = name;
+        fish.SetActive(true);
+        fish.transform.localPosition = localPosition;
+        fish.transform.localRotation = Quaternion.identity;
+        fish.transform.localScale = Vector3.one * Mathf.Max(0.01f, scale);
+
+        PrepareOceanPrefabFish(fish);
+        return fish;
+    }
+
+    private static void PrepareOceanPrefabFish(GameObject fish)
+    {
+        if (fish == null)
+            return;
+
+        int ignoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
+        if (ignoreRaycastLayer >= 0)
+            SetLayerRecursively(fish, ignoreRaycastLayer);
+
+        Collider[] colliders = fish.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            if (colliders[i] != null)
+                Destroy(colliders[i]);
+        }
+
+        Rigidbody[] rigidbodies = fish.GetComponentsInChildren<Rigidbody>(true);
+        for (int i = 0; i < rigidbodies.Length; i++)
+        {
+            Rigidbody rigidbody = rigidbodies[i];
+            if (rigidbody == null)
+                continue;
+
+            rigidbody.isKinematic = true;
+            rigidbody.useGravity = false;
+            rigidbody.detectCollisions = false;
+        }
+
+        Animator[] animators = fish.GetComponentsInChildren<Animator>(true);
+        for (int i = 0; i < animators.Length; i++)
+        {
+            Animator animator = animators[i];
+            if (animator == null)
+                continue;
+
+            animator.enabled = true;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        }
+
+        Renderer[] renderers = fish.GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null)
+                continue;
+
+            renderer.enabled = true;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+    }
+
+    private static GameObject ChooseOceanAnimalPrefab(GameObject[] prefabs, int variant, bool preferLargeFish)
+    {
+        if (prefabs == null || prefabs.Length == 0)
+            return null;
+
+        string[] preferredNames = preferLargeFish
+            ? new[] { "Fish_6_v1", "Fish_6_v3", "Dolfin_v1", "fish_1_v2" }
+            : new[] { "fish_1_v1", "fish_1_v2", "fish_2_v1", "Fish_3_v1", "Fish_4_v1", "Fish_6_v1", "Fish_6_v3", "Dolfin_v1" };
+
+        int matchingCount = CountMatchingPrefabs(prefabs, preferredNames);
+        int matches = 0;
+        for (int i = 0; i < preferredNames.Length; i++)
+        {
+            GameObject candidate = FindPrefabByName(prefabs, preferredNames[i]);
+            if (candidate == null)
+                continue;
+
+            if (matches == variant % Mathf.Max(1, matchingCount))
+                return candidate;
+
+            matches++;
+        }
+
+        return prefabs[Mathf.Abs(variant) % prefabs.Length];
+    }
+
+    private static int CountMatchingPrefabs(GameObject[] prefabs, string[] preferredNames)
+    {
+        int count = 0;
+        for (int i = 0; i < preferredNames.Length; i++)
+        {
+            if (FindPrefabByName(prefabs, preferredNames[i]) != null)
+                count++;
+        }
+
+        return count;
+    }
+
+    private static GameObject FindPrefabByName(GameObject[] prefabs, string prefabName)
+    {
+        if (prefabs == null || string.IsNullOrWhiteSpace(prefabName))
+            return null;
+
+        for (int i = 0; i < prefabs.Length; i++)
+        {
+            GameObject prefab = prefabs[i];
+            if (prefab != null && string.Equals(prefab.name, prefabName, System.StringComparison.OrdinalIgnoreCase))
+                return prefab;
+        }
+
+        return null;
     }
 
     private static void CreateRing(Transform parent, Vector3 localPosition, Quaternion localRotation, Color color)
@@ -1050,6 +1269,41 @@ public sealed class EnvironmentContentManager : MonoBehaviour
             SetLayerRecursively(target.transform.GetChild(i).gameObject, layer);
     }
 
+    private static GameObject FindSceneObject(Scene scene, string objectName)
+    {
+        if (!scene.IsValid() || string.IsNullOrWhiteSpace(objectName))
+            return null;
+
+        GameObject[] roots = scene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
+        {
+            GameObject result = FindChildRecursive(roots[i], objectName);
+            if (result != null)
+                return result;
+        }
+
+        return null;
+    }
+
+    private static GameObject FindChildRecursive(GameObject root, string objectName)
+    {
+        if (root == null)
+            return null;
+
+        if (string.Equals(root.name, objectName, System.StringComparison.OrdinalIgnoreCase))
+            return root;
+
+        Transform rootTransform = root.transform;
+        for (int i = 0; i < rootTransform.childCount; i++)
+        {
+            GameObject result = FindChildRecursive(rootTransform.GetChild(i).gameObject, objectName);
+            if (result != null)
+                return result;
+        }
+
+        return null;
+    }
+
     private Camera ResolveDisplayCamera()
     {
         Camera main = Camera.main;
@@ -1271,6 +1525,67 @@ public sealed class EnvironmentContentManager : MonoBehaviour
             float y = height + Mathf.Sin((normalized * Mathf.PI * 2f) + phase) * 0.25f;
             transform.localPosition = new Vector3(x, y, depth);
             transform.localRotation = Quaternion.Euler(0f, leftToRight ? 180f : 0f, Mathf.Sin(normalized * Mathf.PI * 2f) * 5f);
+        }
+    }
+
+    private sealed class RuntimePrefabFishSwim : MonoBehaviour
+    {
+        private Vector3 basePosition;
+        private float speed = 0.7f;
+        private float width = 0.8f;
+        private float height = 0.12f;
+        private float phase;
+
+        public void Initialize(Vector3 localPosition, float swimSpeed, float swimWidth, float swimHeight, float startPhase)
+        {
+            basePosition = localPosition;
+            speed = Mathf.Max(0.1f, swimSpeed);
+            width = Mathf.Max(0f, swimWidth);
+            height = Mathf.Max(0f, swimHeight);
+            phase = startPhase;
+        }
+
+        private void Update()
+        {
+            float t = Time.time * speed + phase;
+            float horizontal = Mathf.Sin(t) * width;
+            float vertical = Mathf.Sin(t * 0.67f + phase) * height;
+            Vector3 direction = Mathf.Cos(t) >= 0f ? Vector3.right : Vector3.left;
+
+            transform.localPosition = basePosition + new Vector3(horizontal, vertical, 0f);
+            transform.localRotation = Quaternion.LookRotation(direction, Vector3.up) * Quaternion.Euler(0f, 0f, Mathf.Sin(t * 1.3f) * 5f);
+        }
+    }
+
+    private sealed class RuntimePrefabFishPass : MonoBehaviour
+    {
+        private const float TravelWidth = 11.5f;
+        private const float TravelDurationSeconds = 11.5f;
+
+        private bool leftToRight = true;
+        private float phase;
+        private float depth = 6f;
+        private float height;
+
+        public void Initialize(bool travelsLeftToRight, float startPhase, float localDepth, float localHeight)
+        {
+            leftToRight = travelsLeftToRight;
+            phase = startPhase;
+            depth = Mathf.Max(3.8f, localDepth);
+            height = localHeight;
+        }
+
+        private void Update()
+        {
+            float normalized = Mathf.Repeat((Time.time + phase) / TravelDurationSeconds, 1f);
+            float eased = Mathf.SmoothStep(0f, 1f, normalized);
+            float x = Mathf.Lerp(-TravelWidth, TravelWidth, leftToRight ? eased : 1f - eased);
+            float y = height + Mathf.Sin((normalized * Mathf.PI * 2f) + phase) * 0.34f;
+            float roll = Mathf.Sin((normalized * Mathf.PI * 2f) + phase) * 7.5f;
+            Vector3 direction = leftToRight ? Vector3.right : Vector3.left;
+
+            transform.localPosition = new Vector3(x, y, depth);
+            transform.localRotation = Quaternion.LookRotation(direction, Vector3.up) * Quaternion.Euler(0f, 0f, roll);
         }
     }
 

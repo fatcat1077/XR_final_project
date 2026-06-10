@@ -6,7 +6,7 @@ using UnityEngine.Networking;
 public class SpeechToTextClient : MonoBehaviour
 {
     [Header("Server Settings")]
-    [SerializeField] private string serverUrl = "http://127.0.0.1:5000/stt";
+    [SerializeField] private string serverUrl = "http://127.0.0.1:5055/stt";
 
     [Header("References")]
     [SerializeField] private BlackboardManager blackboardManager;
@@ -62,7 +62,7 @@ public class SpeechToTextClient : MonoBehaviour
 #if UNITY_ANDROID && !UNITY_EDITOR
         if (RuntimeNetworkSettings.IsLoopbackUrl(resolvedServerUrl))
         {
-            Debug.LogWarning("[SpeechToTextClient] STT server URL uses localhost/127.x on Quest. Set it to the PC LAN IP, for example http://192.168.1.23:5000/stt.");
+            Debug.LogWarning("[SpeechToTextClient] STT server URL uses localhost/127.x on Quest. Set it to the PC LAN IP, for example http://192.168.1.23:5055/stt.");
         }
 #endif
 

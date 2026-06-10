@@ -4,26 +4,26 @@ public class InputManager : MonoBehaviour
 {
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Alpha0))
+        if (WasPressed(KeyCode.Alpha0, KeyCode.Keypad0))
             RequestTeacherEnvironment(ClassroomEnvironment.Default);
 
-        if (Input.GetKeyDown(KeyCode.Alpha1))
+        if (WasPressed(KeyCode.Alpha1, KeyCode.Keypad1))
             RequestTeacherEnvironment(ClassroomEnvironment.Ocean);
-        else if (Input.GetKeyDown(KeyCode.Alpha2))
+        else if (WasPressed(KeyCode.Alpha2, KeyCode.Keypad2))
             RequestTeacherEnvironment(ClassroomEnvironment.Space);
-        else if (Input.GetKeyDown(KeyCode.Alpha3))
+        else if (WasPressed(KeyCode.Alpha3, KeyCode.Keypad3))
             RequestStudentHandRaised(true);
-        else if (Input.GetKeyDown(KeyCode.Alpha4))
+        else if (WasPressed(KeyCode.Alpha4, KeyCode.Keypad4))
             RequestStudentHandRaised(false);
-        else if (Input.GetKeyDown(KeyCode.Alpha5))
+        else if (WasPressed(KeyCode.Alpha5, KeyCode.Keypad5))
             RequestTeacherClearStudentHand();
-        else if (Input.GetKeyDown(KeyCode.Alpha6))
+        else if (WasPressed(KeyCode.Alpha6, KeyCode.Keypad6))
             RequestTeacherVideoPanel(true);
-        else if (Input.GetKeyDown(KeyCode.Alpha7))
+        else if (WasPressed(KeyCode.Alpha7, KeyCode.Keypad7))
             RequestTeacherVideoPanel(false);
-        else if (Input.GetKeyDown(KeyCode.Alpha8))
+        else if (WasPressed(KeyCode.Alpha8, KeyCode.Keypad8))
             RequestTeacherVideoPlaying(true);
-        else if (Input.GetKeyDown(KeyCode.Alpha9))
+        else if (WasPressed(KeyCode.Alpha9, KeyCode.Keypad9))
             RequestTeacherVideoPlaying(false);
     }
 
@@ -111,5 +111,10 @@ public class InputManager : MonoBehaviour
     private static bool IsTeacher()
     {
         return LocalUserProfile.Role == UserRole.Teacher;
+    }
+
+    private static bool WasPressed(KeyCode primaryKey, KeyCode alternateKey)
+    {
+        return Input.GetKeyDown(primaryKey) || Input.GetKeyDown(alternateKey);
     }
 }

@@ -17,7 +17,7 @@ This project is configured for a two-device classroom test:
 - XR Plug-in Management Android loader: OpenXR
 - OpenXR Android features: Meta Quest Support, Oculus Touch Controller Profile, Meta Quest Touch Pro, Meta Quest Touch Plus
 - Input handling: Both old and new input systems
-- STT URL in `Assets/Project/Scenes/Classroom.unity`: `http://192.168.0.102:5000/stt`
+- STT URL for Quest defaults to `http://192.168.0.100:5055/stt`.
 
 ## Before Testing
 
@@ -30,8 +30,14 @@ This project is configured for a two-device classroom test:
 python python_scripts/server.py
 ```
 
-5. Allow inbound Windows Firewall access for TCP `5000`.
-6. If the PC Wi-Fi IP changes, update the `serverUrl` field on the `SpeechToTextClient` object in `Assets/Project/Scenes/Classroom.unity`.
+The server prints a `Quest STT URL candidate` on startup. From the PC, verify:
+
+```powershell
+curl http://127.0.0.1:5055/health
+```
+
+5. Allow inbound Windows Firewall access for TCP `5055`.
+6. If the PC Wi-Fi IP changes, launch the Quest APK with `xr_stt_url=http://<PC LAN IP>:5055/stt`, or update `DefaultQuestSttServerUrl` in `RuntimeNetworkSettings`.
 
 ## Build Quest APK
 

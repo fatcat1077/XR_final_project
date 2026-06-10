@@ -201,7 +201,7 @@ public class ClassroomSessionState : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_RequestSetStudentHandRaised(bool raised, RpcInfo info = default)
     {
-        Debug.Log($"[ClassroomSessionState] Received student hand RPC. raised={raised}");
+        Debug.Log($"[ClassroomSessionState] Received student hand RPC. raised={raised}, source={info.Source}");
         SetStudentHandRaisedState(raised);
     }
 

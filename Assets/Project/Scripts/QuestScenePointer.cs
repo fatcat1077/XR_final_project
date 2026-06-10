@@ -36,7 +36,7 @@ public sealed class QuestScenePointer : MonoBehaviour
 
     [Header("Classroom Controls")]
     [SerializeField] private bool enableTeacherEnvironmentMenu = true;
-    [SerializeField] private Vector2 teacherMenuSize = new Vector2(1120f, 560f);
+    [SerializeField] private Vector2 teacherMenuSize = new Vector2(1120f, 640f);
     [SerializeField] private float teacherMenuScale = 0.0019f;
     [SerializeField] private float teacherMenuDistance = 1.8f;
     [SerializeField] private float teacherMenuHeightOffset = -0.08f;
@@ -54,6 +54,8 @@ public sealed class QuestScenePointer : MonoBehaviour
     private RectTransform teacherMenuRect;
     private GraphicRaycaster teacherMenuRaycaster;
     private Text captionStatusText;
+    private Text studentHandStatusText;
+    private ClassroomSessionState studentHandSessionState;
     private GameObject hoveredObject;
     private bool configured;
     private bool wasPressed;
@@ -165,6 +167,7 @@ public sealed class QuestScenePointer : MonoBehaviour
     {
         CancelPress();
         ClearHover();
+        UnsubscribeStudentHandStatus();
 
 #if ENABLE_INPUT_SYSTEM
         pointerPositionAction?.Disable();
@@ -192,7 +195,10 @@ public sealed class QuestScenePointer : MonoBehaviour
             return;
 
         if ((Time.frameCount & 63) == 0)
+        {
             RefreshGraphicRaycasters();
+            RefreshStudentHandStatusSubscription("periodic refresh");
+        }
 
         if (ConsumeMenuButtonPressed())
         {
@@ -503,6 +509,7 @@ public sealed class QuestScenePointer : MonoBehaviour
 
         ShowTeacherMenuInFrontOfView("Initial placement");
         RefreshGraphicRaycasters();
+        RefreshStudentHandStatusSubscription("menu configured");
         Debug.Log($"[QuestScenePointer] Quest classroom control menu created for Test_classroom. role={LocalUserProfile.Role}");
     }
 
@@ -572,19 +579,23 @@ public sealed class QuestScenePointer : MonoBehaviour
 
     private void CreateTeacherControls()
     {
-        CreateMenuLabel("Teacher Controls", new Vector2(0f, 218f), new Vector2(960f, 58f), 38, FontStyle.Bold);
-        CreateMenuLabel("Environment", new Vector2(0f, 154f), new Vector2(960f, 42f), 26, FontStyle.Bold);
-        CreateMenuButton("Default", new Vector2(-340f, 86f), () => RequestEnvironment(ClassroomEnvironment.Default));
-        CreateMenuButton("Ocean", new Vector2(0f, 86f), () => RequestEnvironment(ClassroomEnvironment.Ocean));
-        CreateMenuButton("Space", new Vector2(340f, 86f), () => RequestEnvironment(ClassroomEnvironment.Space));
+        CreateMenuLabel("Teacher Controls", new Vector2(0f, 268f), new Vector2(960f, 58f), 38, FontStyle.Bold);
+        CreateMenuLabel("Environment", new Vector2(0f, 204f), new Vector2(960f, 42f), 26, FontStyle.Bold);
+        CreateMenuButton("Default", new Vector2(-340f, 136f), () => RequestEnvironment(ClassroomEnvironment.Default));
+        CreateMenuButton("Ocean", new Vector2(0f, 136f), () => RequestEnvironment(ClassroomEnvironment.Ocean));
+        CreateMenuButton("Space", new Vector2(340f, 136f), () => RequestEnvironment(ClassroomEnvironment.Space));
 
-        CreateMenuLabel("Classroom", new Vector2(0f, 14f), new Vector2(960f, 42f), 26, FontStyle.Bold);
-        CreateMenuButton("Clear Board", new Vector2(-340f, -58f), RequestClearBlackboard);
-        CreateMenuButton("Caption", new Vector2(0f, -58f), RequestMockCaption);
-        CreateMenuButton("Video Panel", new Vector2(340f, -58f), RequestToggleVideoPanel);
-        CreateMenuButton("Play/Pause", new Vector2(0f, -188f), RequestToggleVideoPlayback);
+        CreateMenuLabel("Classroom", new Vector2(0f, 64f), new Vector2(960f, 42f), 26, FontStyle.Bold);
+        CreateMenuButton("Clear Board", new Vector2(-340f, -8f), RequestClearBlackboard);
+        CreateMenuButton("Caption", new Vector2(0f, -8f), RequestMockCaption);
+        CreateMenuButton("Video Panel", new Vector2(340f, -8f), RequestToggleVideoPanel);
+        CreateMenuButton("Play/Pause", new Vector2(0f, -118f), RequestToggleVideoPlayback);
 
-        captionStatusText = CreateTextObject("Caption: Ready", "CaptionStatusText", new Vector2(0f, -258f), new Vector2(980f, 40f), 22, FontStyle.Normal);
+        studentHandStatusText = CreateTextObject("Student Hand: Syncing", "StudentHandStatusText", new Vector2(0f, -214f), new Vector2(980f, 42f), 24, FontStyle.Bold);
+        studentHandStatusText.alignment = TextAnchor.MiddleCenter;
+        SetStudentHandStatusText(false, "Syncing");
+
+        captionStatusText = CreateTextObject("Caption: Ready", "CaptionStatusText", new Vector2(0f, -284f), new Vector2(980f, 40f), 22, FontStyle.Normal);
         captionStatusText.alignment = TextAnchor.MiddleCenter;
         captionStatusText.color = new Color(0.74f, 0.96f, 1f, 1f);
         QuestCaptionStatusReporter.Register(captionStatusText);
@@ -595,6 +606,9 @@ public sealed class QuestScenePointer : MonoBehaviour
         CreateMenuLabel("Student Controls", new Vector2(0f, 120f), new Vector2(960f, 64f), 40, FontStyle.Bold);
         CreateMenuButton("Raise Hand", new Vector2(-170f, -34f), () => RequestStudentHandRaised(true), new Vector2(300f, 96f));
         CreateMenuButton("Lower Hand", new Vector2(170f, -34f), () => RequestStudentHandRaised(false), new Vector2(300f, 96f));
+        studentHandStatusText = CreateTextObject("Student Hand: Syncing", "StudentHandStatusText", new Vector2(0f, -150f), new Vector2(860f, 42f), 24, FontStyle.Bold);
+        studentHandStatusText.alignment = TextAnchor.MiddleCenter;
+        SetStudentHandStatusText(false, "Syncing");
     }
 
     private static bool IsTestClassroomScene(Scene scene)
@@ -678,7 +692,7 @@ public sealed class QuestScenePointer : MonoBehaviour
 
         Text label = textObject.GetComponent<Text>();
         label.text = text;
-        label.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        label.font = GetRuntimeFont();
         label.fontSize = fontSize;
         label.fontStyle = fontStyle;
         label.resizeTextForBestFit = true;
@@ -863,6 +877,7 @@ public sealed class QuestScenePointer : MonoBehaviour
         }
 
         UpdateLocalHandRaiseUi(raised);
+        SetStudentHandStatusText(raised);
         Debug.Log($"[QuestScenePointer] Student hand raised={raised}. networkRequestSent={requested}");
     }
 
@@ -971,6 +986,66 @@ public sealed class QuestScenePointer : MonoBehaviour
         TeacherHandRaiseUI[] handRaiseViews = FindObjectsOfType<TeacherHandRaiseUI>(true);
         for (int i = 0; i < handRaiseViews.Length; i++)
             handRaiseViews[i].UpdateHandRaiseStatus(raised);
+    }
+
+    private void RefreshStudentHandStatusSubscription(string reason)
+    {
+        if (studentHandStatusText == null)
+            return;
+
+        if (studentHandSessionState != null &&
+            studentHandSessionState.Object != null &&
+            studentHandSessionState.Object.IsValid)
+        {
+            SetStudentHandStatusText(studentHandSessionState.IsStudentHandRaised);
+            return;
+        }
+
+        UnsubscribeStudentHandStatus();
+
+        if (!TryGetValidSessionState(out ClassroomSessionState sessionState))
+        {
+            SetStudentHandStatusText(false, "Syncing");
+            return;
+        }
+
+        studentHandSessionState = sessionState;
+        studentHandSessionState.StudentHandRaisedChanged += HandleQuestPanelStudentHandRaisedChanged;
+        SetStudentHandStatusText(studentHandSessionState.IsStudentHandRaised);
+        Debug.Log($"[QuestScenePointer] Student hand status panel subscribed. reason={reason}, raised={studentHandSessionState.IsStudentHandRaised}");
+    }
+
+    private void UnsubscribeStudentHandStatus()
+    {
+        if (studentHandSessionState == null)
+            return;
+
+        studentHandSessionState.StudentHandRaisedChanged -= HandleQuestPanelStudentHandRaisedChanged;
+        studentHandSessionState = null;
+    }
+
+    private void HandleQuestPanelStudentHandRaisedChanged(bool raised)
+    {
+        SetStudentHandStatusText(raised);
+        Debug.Log($"[QuestScenePointer] Student hand status panel updated. raised={raised}");
+    }
+
+    private void SetStudentHandStatusText(bool raised, string overrideState = null)
+    {
+        if (studentHandStatusText == null)
+            return;
+
+        string state = overrideState ?? (raised ? "Raised" : "Lowered");
+        studentHandStatusText.text = $"Student Hand: {state}";
+        studentHandStatusText.color = raised
+            ? new Color(1f, 0.82f, 0.28f, 1f)
+            : new Color(0.74f, 0.96f, 1f, 1f);
+    }
+
+    private static Font GetRuntimeFont()
+    {
+        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        return font != null ? font : Font.CreateDynamicFontFromOSFont("Arial", 16);
     }
 
     private void CreatePointerVisuals()
