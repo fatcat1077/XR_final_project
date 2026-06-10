@@ -4,18 +4,37 @@ public static class RuntimeNetworkSettings
 {
     public const string SttServerUrlPlayerPrefsKey = "XR_STT_SERVER_URL";
     public const string DefaultEditorSttServerUrl = "http://127.0.0.1:5000/stt";
+    public const string DefaultQuestSttServerUrl = "http://192.168.0.100:5000/stt";
 
     public static string GetSttServerUrl(string serializedUrl)
     {
         string savedUrl = PlayerPrefs.GetString(SttServerUrlPlayerPrefsKey, string.Empty);
 
         if (!string.IsNullOrWhiteSpace(savedUrl))
-            return NormalizeSttServerUrl(savedUrl);
+        {
+            string normalizedSavedUrl = NormalizeSttServerUrl(savedUrl);
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (IsLoopbackUrl(normalizedSavedUrl))
+                return NormalizeSttServerUrl(DefaultQuestSttServerUrl);
+#endif
+            return normalizedSavedUrl;
+        }
 
         if (!string.IsNullOrWhiteSpace(serializedUrl))
-            return NormalizeSttServerUrl(serializedUrl);
+        {
+            string normalizedSerializedUrl = NormalizeSttServerUrl(serializedUrl);
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (IsLoopbackUrl(normalizedSerializedUrl))
+                return NormalizeSttServerUrl(DefaultQuestSttServerUrl);
+#endif
+            return normalizedSerializedUrl;
+        }
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+        return NormalizeSttServerUrl(DefaultQuestSttServerUrl);
+#else
         return DefaultEditorSttServerUrl;
+#endif
     }
 
     public static void SaveSttServerUrl(string url)

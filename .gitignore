@@ -13,6 +13,7 @@ UserSettings/
 .DS_Store
 
 # Others
+__pycache__/
 *.csproj
 *.unityproj
 *.sln
@@ -21,7 +22,11 @@ UserSettings/
 *.booproj
 *.svd
 *.pdb
+*.pdb.meta
 *.mdb
 *.opendb
 *.VC.db
 *venv
+
+# big files
+Assets/Real Stars Skybox/

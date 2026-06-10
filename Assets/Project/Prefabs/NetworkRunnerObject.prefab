@@ -61,7 +61,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   IsSceneTakeOverEnabled: 1
   LogSceneLoadErrors: 1
-  DestroySpawnedPrefabsOnSceneUnload: 1
+  DestroySpawnedPrefabsOnSceneUnload: 0
 --- !u!114 &2270315421819775325
 MonoBehaviour:
   m_ObjectHideFlags: 0

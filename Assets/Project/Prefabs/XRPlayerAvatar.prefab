@@ -166,18 +166,18 @@ MonoBehaviour:
   interestGroup: 0
   useTargetPlayers: 0
   targetPlayers: 
-  debugEchoMode: 1
+  debugEchoMode: 0
   reliableMode: 0
   encrypt: 0
-  transmitEnabled: 1
+  transmitEnabled: 0
   samplingRate: 24000
   frameDuration: 40000
   bitrate: 30000
-  sourceType: 0
+  sourceType: 2
   microphoneType: 1
   audioClip: {fileID: 0}
   loopAudioClip: 1
-  recordingEnabled: 1
+  recordingEnabled: 0
   audioSessionParameters:
     Category: 4
     Mode: 1
@@ -190,7 +190,7 @@ MonoBehaviour:
   stopRecordingWhenPaused: 0
   useOnAudioFilterRead: 0
   useMicrophoneTypeFallback: 1
-  recordWhenJoined: 1
+  recordWhenJoined: 0
 --- !u!1 &7138955750620164721
 GameObject:
   m_ObjectHideFlags: 0

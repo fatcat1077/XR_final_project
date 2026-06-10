@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Fusion;
 using Fusion.Sockets;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class PlayerSpawner : MonoBehaviour, INetworkRunnerCallbacks
 {
@@ -39,24 +40,23 @@ public class PlayerSpawner : MonoBehaviour, INetworkRunnerCallbacks
     {
         Debug.Log("[PlayerSpawner] OnSceneLoadDone");
         sceneReady = true;
+        PruneInvalidSpawnedPlayers();
 
         if (!runner.IsServer)
             return;
 
         // 場景準備好後，把還沒 Spawn 的玩家全部補上
-        for (int i = 0; i < pendingPlayers.Count; i++)
-        {
-            SpawnPlayer(runner, pendingPlayers[i]);
-        }
+        foreach (PlayerRef player in runner.ActivePlayers)
+            SpawnPlayer(runner, player);
 
         pendingPlayers.Clear();
     }
 
     private void SpawnPlayer(NetworkRunner runner, PlayerRef player)
     {
-        if (spawnedPlayers.ContainsKey(player))
+        if (TryGetSpawnedPlayer(player, out NetworkObject existingPlayerObject))
         {
-            Debug.Log($"[PlayerSpawner] Player {player} already spawned, skip.");
+            Debug.Log($"[PlayerSpawner] Player {player} already spawned on {existingPlayerObject.name}, skip.");
             return;
         }
 
@@ -84,30 +84,52 @@ public class PlayerSpawner : MonoBehaviour, INetworkRunnerCallbacks
         }
 
         playerObject.name = $"PlayerAvatar_{player.PlayerId}";
+        DontDestroyOnLoad(playerObject.gameObject);
         spawnedPlayers[player] = playerObject;
 
         Debug.Log($"[PlayerSpawner] SUCCESS spawn for {player}");
         Debug.Log($"[PlayerSpawner] spawned object name = {playerObject.name}");
         Debug.Log($"[PlayerSpawner] spawned object position = {playerObject.transform.position}");
         Debug.Log($"[PlayerSpawner] spawnedPlayers.Count = {spawnedPlayers.Count}");
+        Debug.Log($"[PlayerSpawner] {playerObject.name} marked DontDestroyOnLoad so Photon Voice survives scene travel.");
     }
+
+    private bool TryGetSpawnedPlayer(PlayerRef player, out NetworkObject playerObject)
+    {
+        if (spawnedPlayers.TryGetValue(player, out playerObject) && playerObject != null && playerObject.IsValid)
+            return true;
+
+        spawnedPlayers.Remove(player);
+        playerObject = null;
+        return false;
+    }
+
+    private void PruneInvalidSpawnedPlayers()
+    {
+        s_pruneBuffer.Clear();
+
+        foreach (KeyValuePair<PlayerRef, NetworkObject> entry in spawnedPlayers)
+        {
+            NetworkObject playerObject = entry.Value;
+            if (playerObject == null || !playerObject.IsValid)
+                s_pruneBuffer.Add(entry.Key);
+        }
+
+        for (int i = 0; i < s_pruneBuffer.Count; i++)
+        {
+            spawnedPlayers.Remove(s_pruneBuffer[i]);
+            Debug.LogWarning($"[PlayerSpawner] Removed stale spawned player reference for {s_pruneBuffer[i]}.");
+        }
+
+        s_pruneBuffer.Clear();
+    }
+
+    private static readonly List<PlayerRef> s_pruneBuffer = new();
 
     private Transform GetSpawnPointFor(NetworkRunner runner, PlayerRef player)
     {
-        GameObject teacherSpawn = GameObject.Find("TeacherSpawnPoint");
-        GameObject studentSpawn = GameObject.Find("StudentSpawnPoint");
-
-        if (teacherSpawn == null)
-        {
-            Debug.LogError("[PlayerSpawner] TeacherSpawnPoint not found in scene!");
-            return null;
-        }
-
-        if (studentSpawn == null)
-        {
-            Debug.LogError("[PlayerSpawner] StudentSpawnPoint not found in scene!");
-            return null;
-        }
+        Transform teacherSpawn = ResolveOrCreateSpawnPoint("TeacherSpawnPoint", true);
+        Transform studentSpawn = ResolveOrCreateSpawnPoint("StudentSpawnPoint", false);
 
         Debug.Log($"[PlayerSpawner] runner.LocalPlayer = {runner.LocalPlayer}");
         Debug.Log($"[PlayerSpawner] deciding spawn for player = {player}");
@@ -116,12 +138,38 @@ public class PlayerSpawner : MonoBehaviour, INetworkRunnerCallbacks
         if (player == runner.LocalPlayer)
         {
             Debug.Log($"[PlayerSpawner] {player} -> TeacherSpawnPoint");
-            return teacherSpawn.transform;
+            return teacherSpawn;
         }
 
         // 其他加入者 = Student
         Debug.Log($"[PlayerSpawner] {player} -> StudentSpawnPoint");
-        return studentSpawn.transform;
+        return studentSpawn;
+    }
+
+    private static Transform ResolveOrCreateSpawnPoint(string spawnPointName, bool isTeacher)
+    {
+        GameObject existing = GameObject.Find(spawnPointName);
+        if (existing != null)
+            return existing.transform;
+
+        GameObject spawnPoint = new GameObject(spawnPointName);
+        Scene activeScene = SceneManager.GetActiveScene();
+        if (activeScene.IsValid() && activeScene.isLoaded)
+            SceneManager.MoveGameObjectToScene(spawnPoint, activeScene);
+
+        Camera camera = Camera.main != null ? Camera.main : UnityEngine.Object.FindObjectOfType<Camera>();
+        Vector3 basePosition = camera != null ? camera.transform.position : new Vector3(0f, 1.6f, 0f);
+        basePosition.y = Mathf.Max(basePosition.y, 1.6f);
+
+        Quaternion baseRotation = camera != null
+            ? Quaternion.Euler(0f, camera.transform.eulerAngles.y, 0f)
+            : Quaternion.identity;
+
+        Vector3 offset = isTeacher ? Vector3.zero : baseRotation * new Vector3(0.7f, 0f, 0.7f);
+        spawnPoint.transform.SetPositionAndRotation(basePosition + offset, baseRotation);
+
+        Debug.LogWarning($"[PlayerSpawner] {spawnPointName} not found; created runtime fallback at {spawnPoint.transform.position} in scene '{spawnPoint.scene.name}'.");
+        return spawnPoint.transform;
     }
 
     public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
@@ -166,5 +214,11 @@ public class PlayerSpawner : MonoBehaviour, INetworkRunnerCallbacks
     }
     public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
     public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
-    public void OnSceneLoadStart(NetworkRunner runner) { }
+    public void OnSceneLoadStart(NetworkRunner runner)
+    {
+        Debug.Log("[PlayerSpawner] OnSceneLoadStart");
+        sceneReady = false;
+        pendingPlayers.Clear();
+        PruneInvalidSpawnedPlayers();
+    }
 }

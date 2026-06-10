@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Fusion;
 using Fusion.Sockets;
+using Photon.Voice.Fusion;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -25,7 +26,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
     [Header("Scene Settings")]
     [SerializeField] private int classroomSceneBuildIndex = 1;
-    [SerializeField] private string classroomScenePath = "Assets/Project/Scenes/Classroom.unity";
+    [SerializeField] private string classroomScenePath = "Assets/Scenes/Test_classroom.unity";
 
     [Header("Photon Region (set same value in PhotonAppSettings.asset)")]
     [SerializeField] private string fixedRegion = "hk";
@@ -145,7 +146,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
             StartGameResult result = await StartGameOnce(mode);
 
-            if (result.Ok)
+            if (result != null && result.Ok)
             {
                 Debug.Log($"[FusionLauncher] StartGameWithRetry SUCCESS on attempt {attempt}");
                 return;
@@ -153,12 +154,15 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
             bool shouldRetry =
                 mode == GameMode.Client &&
+                result != null &&
                 result.ShutdownReason == ShutdownReason.GameNotFound &&
                 attempt < maxAttempts;
 
             if (!shouldRetry)
             {
-                Debug.LogWarning($"[FusionLauncher] No more retry. Final reason = {result.ShutdownReason}, message = {result.ErrorMessage}");
+                string finalReason = result == null ? "StartGameOnce returned no result" : result.ShutdownReason.ToString();
+                string finalMessage = result == null ? "See previous FusionLauncher error logs." : result.ErrorMessage;
+                Debug.LogWarning($"[FusionLauncher] No more retry. Final reason = {finalReason}, message = {finalMessage}");
                 return;
             }
 
@@ -220,6 +224,10 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
                 if (oldSpawner != null)
                     runner.RemoveCallbacks(oldSpawner);
 
+                var oldVoiceClient = runner.GetComponent<FusionVoiceClient>();
+                if (oldVoiceClient != null)
+                    runner.RemoveCallbacks(oldVoiceClient);
+
                 if (runner.IsRunning)
                 {
                     Debug.Log("[FusionLauncher] Old runner is running. Shutting down...");
@@ -260,6 +268,17 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
                 Debug.LogError("[FusionLauncher] PlayerSpawner not found on runner prefab!");
             }
 
+            var voiceClient = runner.GetComponent<FusionVoiceClient>();
+            if (voiceClient != null)
+            {
+                runner.AddCallbacks(voiceClient);
+                Debug.Log("[FusionLauncher] FusionVoiceClient callbacks registered.");
+            }
+            else
+            {
+                Debug.LogError("[FusionLauncher] FusionVoiceClient not found on runner prefab; voice chat will not survive scene changes.");
+            }
+
             DontDestroyOnLoad(runner.gameObject);
 
             Debug.Log("[FusionLauncher] Runner instantiated and registered.");
@@ -280,6 +299,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         Debug.Log($"[FusionLauncher] StartGame with Region = {fixedRegion} (must match PhotonAppSettings.asset)");
         Debug.Log($"[FusionLauncher] NetworkSceneInfo created with SceneRef.FromIndex({resolvedClassroomSceneBuildIndex}) and LoadSceneMode.Single");
 
+        Fusion.Photon.Realtime.FusionAppSettings photonSettings = CreateFixedRegionPhotonSettings();
         StartGameResult result;
 
         try
@@ -291,7 +311,9 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
                 GameMode = mode,
                 SessionName = LocalUserProfile.RoomName,
                 Scene = sceneInfo,
-                PlayerCount = 2
+                PlayerCount = 2,
+                CustomPhotonAppSettings = photonSettings,
+                UseCachedRegions = false
             });
 
             Debug.Log("[FusionLauncher] runner.StartGame(...) returned.");
@@ -335,6 +357,30 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         return result;
     }
 
+    private Fusion.Photon.Realtime.FusionAppSettings CreateFixedRegionPhotonSettings()
+    {
+        Fusion.Photon.Realtime.FusionAppSettings appSettings =
+            Fusion.Photon.Realtime.PhotonAppSettings.Global.AppSettings.GetCopy();
+
+        string normalizedRegion = NormalizeRegionCode(fixedRegion);
+        if (!string.IsNullOrWhiteSpace(normalizedRegion))
+        {
+            appSettings.UseNameServer = true;
+            appSettings.FixedRegion = normalizedRegion;
+            appSettings.BestRegionSummaryFromStorage = null;
+        }
+
+        Debug.Log($"[FusionLauncher] Photon settings for StartGame: AppVersion={appSettings.AppVersion}, FixedRegion={appSettings.FixedRegion}, UseNameServer={appSettings.UseNameServer}, UseCachedRegions=false");
+        return appSettings;
+    }
+
+    private static string NormalizeRegionCode(string region)
+    {
+        return string.IsNullOrWhiteSpace(region)
+            ? string.Empty
+            : region.Trim().ToLowerInvariant();
+    }
+
     private void TryLogSessionInfo(NetworkRunner runner, string prefix)
     {
         try
@@ -375,7 +421,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
     {
         if (!string.IsNullOrWhiteSpace(classroomScenePath))
         {
-            string expectedPath = classroomScenePath.Replace('\\', '/');
+            string expectedPath = NormalizeScenePath(classroomScenePath);
 
             for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
             {
@@ -389,6 +435,19 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
         }
 
         return classroomSceneBuildIndex;
+    }
+
+    private static string NormalizeScenePath(string scenePath)
+    {
+        if (string.IsNullOrWhiteSpace(scenePath))
+            return string.Empty;
+
+        string normalizedPath = scenePath.Replace('\\', '/').Trim();
+
+        if (!normalizedPath.EndsWith(".unity", StringComparison.OrdinalIgnoreCase))
+            normalizedPath += ".unity";
+
+        return normalizedPath;
     }
 
     private void HideLobbyObjectsAfterSceneLoad()
@@ -457,9 +516,7 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
     private bool IsClassroomSceneLoaded()
     {
-        string expectedPath = string.IsNullOrWhiteSpace(classroomScenePath)
-            ? string.Empty
-            : classroomScenePath.Replace('\\', '/');
+        string expectedPath = NormalizeScenePath(classroomScenePath);
 
         for (int i = 0; i < SceneManager.sceneCount; i++)
         {
@@ -474,7 +531,8 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
                 string.Equals(scenePath, expectedPath, StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            if (string.Equals(scene.name, "Classroom", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(scene.name, "Classroom", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(scene.name, "Test_classroom", StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 

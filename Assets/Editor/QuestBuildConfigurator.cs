@@ -15,17 +15,35 @@ public static class QuestBuildConfigurator
     private const string SettingsAssetPath = "Assets/XR/Settings/XRGeneralSettingsPerBuildTarget.asset";
     private const string QuestBuildOutputPath = "Builds/Quest/XR_course_project_Quest.apk";
 
+    private static readonly string[] QuestBuildScenes =
+    {
+        "Assets/Scenes/Test_lobby.unity",
+        "Assets/Scenes/Test_classroom.unity",
+        "Assets/Scenes/Ocean.unity",
+        "Assets/Scenes/Space.unity",
+    };
+
     private static readonly string[] QuestFeatureIds =
     {
         "com.unity.openxr.feature.metaquest",
         "com.unity.openxr.feature.input.oculustouch",
         "com.unity.openxr.feature.input.metaquestpro",
         "com.unity.openxr.feature.input.metaquestplus",
+        "com.unity.openxr.feature.input.handinteraction",
+        "com.unity.openxr.feature.input.handinteractionposes",
+        "com.unity.openxr.feature.input.palmpose",
+    };
+
+    private static readonly string[] DisabledQuestFeatureIds =
+    {
+        "com.unity.openxr.feature.input.eyetracking",
+        "com.unity.openxr.feature.foveatedrendering",
     };
 
     [MenuItem("XR Course/Configure PC + Quest Test Build")]
     public static void ConfigurePcQuestTestBuild()
     {
+        ConfigureQuestSceneOrder();
         ConfigureXRManagement(BuildTargetGroup.Android);
         EnableQuestOpenXRFeatures(BuildTargetGroup.Android);
 
@@ -52,9 +70,8 @@ public static class QuestBuildConfigurator
         EditorUserBuildSettings.allowDebugging = false;
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
 
-        string[] scenes = EditorBuildSettings.scenes
-            .Where(scene => scene.enabled)
-            .Select(scene => scene.path)
+        string[] scenes = QuestBuildScenes
+            .Where(scenePath => File.Exists(scenePath))
             .ToArray();
 
         BuildReport report = BuildPipeline.BuildPlayer(
@@ -69,6 +86,16 @@ public static class QuestBuildConfigurator
         }
 
         Debug.Log($"[QuestBuildConfigurator] Quest APK built at {QuestBuildOutputPath}. Size={report.summary.totalSize} bytes");
+    }
+
+    private static void ConfigureQuestSceneOrder()
+    {
+        EditorBuildSettings.scenes = QuestBuildScenes
+            .Where(scenePath => File.Exists(scenePath))
+            .Select(scenePath => new EditorBuildSettingsScene(scenePath, true))
+            .ToArray();
+
+        Debug.Log("[QuestBuildConfigurator] Quest scene order configured: Test_lobby -> Test_classroom -> Ocean -> Space.");
     }
 
     private static void ConfigureXRManagement(BuildTargetGroup targetGroup)
@@ -129,6 +156,16 @@ public static class QuestBuildConfigurator
             }
 
             feature.enabled = true;
+            EditorUtility.SetDirty(feature);
+        }
+
+        foreach (string featureId in DisabledQuestFeatureIds)
+        {
+            OpenXRFeature feature = FeatureHelpers.GetFeatureWithIdForBuildTarget(targetGroup, featureId);
+            if (feature == null)
+                continue;
+
+            feature.enabled = false;
             EditorUtility.SetDirty(feature);
         }
     }

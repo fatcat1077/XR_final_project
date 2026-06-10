@@ -6,14 +6,28 @@ public static class WavUtility
 {
     public static byte[] FromAudioClip(AudioClip clip)
     {
-        using MemoryStream stream = new MemoryStream();
-
         int channels = clip.channels;
         int sampleRate = clip.frequency;
         int samples = clip.samples;
 
         float[] floatData = new float[samples * channels];
         clip.GetData(floatData, 0);
+
+        return FromSamples(floatData, sampleRate, channels);
+    }
+
+    public static byte[] FromSamples(float[] floatData, int sampleRate, int channels)
+    {
+        if (floatData == null)
+            throw new ArgumentNullException(nameof(floatData));
+
+        if (sampleRate <= 0)
+            throw new ArgumentOutOfRangeException(nameof(sampleRate), "Sample rate must be positive.");
+
+        if (channels <= 0)
+            throw new ArgumentOutOfRangeException(nameof(channels), "Channel count must be positive.");
+
+        using MemoryStream stream = new MemoryStream();
 
         short[] intData = new short[floatData.Length];
         byte[] bytesData = new byte[floatData.Length * 2];
@@ -22,12 +36,13 @@ public static class WavUtility
 
         for (int i = 0; i < floatData.Length; i++)
         {
-            intData[i] = (short)(floatData[i] * rescaleFactor);
+            float sample = Mathf.Clamp(floatData[i], -1f, 1f);
+            intData[i] = (short)(sample * rescaleFactor);
             byte[] byteArr = BitConverter.GetBytes(intData[i]);
             byteArr.CopyTo(bytesData, i * 2);
         }
 
-        WriteHeader(stream, clip, bytesData.Length);
+        WriteHeader(stream, sampleRate, channels, bytesData.Length);
         stream.Write(bytesData, 0, bytesData.Length);
 
         return stream.ToArray();
@@ -35,8 +50,11 @@ public static class WavUtility
 
     private static void WriteHeader(Stream stream, AudioClip clip, int dataLength)
     {
-        int channels = clip.channels;
-        int sampleRate = clip.frequency;
+        WriteHeader(stream, clip.frequency, clip.channels, dataLength);
+    }
+
+    private static void WriteHeader(Stream stream, int sampleRate, int channels, int dataLength)
+    {
         int byteRate = sampleRate * channels * 2;
 
         stream.Position = 0;

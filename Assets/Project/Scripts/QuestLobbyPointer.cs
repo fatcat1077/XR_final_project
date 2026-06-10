@@ -20,10 +20,11 @@ public class QuestLobbyPointer : MonoBehaviour
     [SerializeField] private bool enableInEditor;
     [SerializeField] private Vector2 worldCanvasSize = new Vector2(1200f, 720f);
     [SerializeField] private float worldCanvasScale = 0.0025f;
-    [SerializeField] private float canvasDistance = 2.0f;
-    [SerializeField] private float canvasHeightOffset = -0.12f;
+    [SerializeField] private float cameraHeight = 1.6f;
+    [SerializeField] private float canvasDistance = 1.8f;
+    [SerializeField] private float canvasHeightOffset = -0.02f;
     [SerializeField] private bool keepCanvasCenteredOnView;
-    [SerializeField] private int recenterSettleFrames = 3;
+    [SerializeField] private int recenterSettleFrames = 8;
 
     [Header("Quest UI Size")]
     [SerializeField] private Vector2 buttonSize = new Vector2(420f, 112f);
@@ -54,6 +55,8 @@ public class QuestLobbyPointer : MonoBehaviour
     [SerializeField] private Vector3 controllerVisualRotationOffsetEuler;
     [SerializeField] private Vector3 controllerBodySize = new Vector3(0.08f, 0.06f, 0.16f);
 
+    private static readonly Vector3 DefaultPointerPositionOffset = new Vector3(0f, -0.015f, 0.095f);
+
     private readonly List<RaycastResult> raycastResults = new();
     private RectTransform canvasRect;
     private GraphicRaycaster graphicRaycaster;
@@ -61,12 +64,15 @@ public class QuestLobbyPointer : MonoBehaviour
     private LineRenderer pointerLine;
     private Transform reticle;
     private Transform controllerVisual;
+    private Transform controllerRayAnchor;
     private GameObject hoveredObject;
     private bool wasPressed;
     private bool wasRecenterPressed;
     private bool configured;
     private int pendingRecenterFrames;
     private bool loggedMissingViewPose;
+    private Vector2 lastPointerPosition;
+    private bool hasLastPointerPosition;
 
 #if ENABLE_INPUT_SYSTEM
     private InputAction pointerPositionAction;
@@ -124,6 +130,7 @@ public class QuestLobbyPointer : MonoBehaviour
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
+        CancelPress();
         ClearHover();
 
 #if ENABLE_INPUT_SYSTEM
@@ -145,9 +152,9 @@ public class QuestLobbyPointer : MonoBehaviour
 
         if (ConsumeRecenterPressed())
         {
-            RequestCanvasRecenter();
+            ShowOptionsInFrontOfView("A button");
             ClearHover();
-            wasPressed = false;
+            CancelPress();
         }
 
         if (pendingRecenterFrames > 0 && PlaceCanvasInFrontOfUser())
@@ -158,7 +165,7 @@ public class QuestLobbyPointer : MonoBehaviour
             UpdateVisual(pointerRay, false, pointerRay.origin + pointerRay.direction * rayLength);
             UpdateControllerVisual(Vector3.zero, Quaternion.identity, false);
             ClearHover();
-            wasPressed = false;
+            CancelPress();
             return;
         }
 
@@ -168,10 +175,7 @@ public class QuestLobbyPointer : MonoBehaviour
 
         UpdateVisual(pointerRay, hasHit, hasHit ? hitWorld : pointerRay.origin + pointerRay.direction * rayLength);
 
-        if (hasController && TryGetControllerVisualPose(out Vector3 visualPosition, out Quaternion visualRotation))
-            UpdateControllerVisual(visualPosition, visualRotation, true);
-        else
-            UpdateControllerVisual(controllerPosition, controllerRotation, hasController);
+        UpdateControllerVisual(controllerPosition, controllerRotation, hasController);
 
         UpdateHover(target, raycastResult);
 
@@ -200,6 +204,10 @@ public class QuestLobbyPointer : MonoBehaviour
             return;
         }
 
+        lobbyCanvas.gameObject.SetActive(true);
+        lobbyCamera.gameObject.SetActive(true);
+        lobbyCamera.enabled = true;
+
         canvasRect = lobbyCanvas.transform as RectTransform;
         EnsureEventSystem();
         graphicRaycaster = lobbyCanvas.GetComponent<GraphicRaycaster>();
@@ -224,15 +232,15 @@ public class QuestLobbyPointer : MonoBehaviour
         CreateControllerVisual();
 
         configured = true;
-        RequestCanvasRecenter();
+        ShowOptionsInFrontOfView("Initial placement");
         Debug.Log("[QuestLobbyPointer] Quest lobby pointer configured.");
     }
 
     public void HideLobbyUi(string reason = "Scene transition")
     {
+        CancelPress();
         configured = false;
         pendingRecenterFrames = 0;
-        wasPressed = false;
         wasRecenterPressed = false;
         ClearHover();
 
@@ -255,26 +263,54 @@ public class QuestLobbyPointer : MonoBehaviour
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         if (IsClassroomScene(scene))
+        {
             HideLobbyUi($"Loaded scene '{scene.name}'");
+            DisableLobbyCamera($"Loaded scene '{scene.name}'");
+            QuestXrRenderGuard.ReconcileNow($"QuestLobbyPointer detected classroom scene '{scene.name}'");
+        }
     }
 
     private static bool IsClassroomScene(Scene scene)
     {
+        string scenePath = scene.path.Replace('\\', '/');
         return string.Equals(scene.name, "Classroom", System.StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(scene.path.Replace('\\', '/'), "Assets/Project/Scenes/Classroom.unity", System.StringComparison.OrdinalIgnoreCase);
+            string.Equals(scene.name, "Test_classroom", System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(scenePath, "Assets/Project/Scenes/Classroom.unity", System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(scenePath, "Assets/Scenes/Test_classroom.unity", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void DisableLobbyCamera(string reason)
+    {
+        if (lobbyCamera == null)
+            return;
+
+        lobbyCamera.stereoTargetEye = StereoTargetEyeMask.None;
+        lobbyCamera.enabled = false;
+        lobbyCamera.gameObject.SetActive(false);
+
+        if (lobbyCamera.TryGetComponent(out AudioListener listener))
+            listener.enabled = false;
+
+        Debug.Log($"[QuestLobbyPointer] Lobby camera disabled. Reason: {reason}");
     }
 
     private void ConfigureLobbyCamera()
     {
-        lobbyCamera.transform.SetPositionAndRotation(new Vector3(0f, 1.6f, 0f), Quaternion.identity);
+        lobbyCamera.transform.SetPositionAndRotation(new Vector3(0f, cameraHeight, -0.15f), Quaternion.identity);
         lobbyCamera.nearClipPlane = 0.05f;
         lobbyCamera.farClipPlane = 100f;
+        lobbyCamera.fieldOfView = 70f;
     }
 
     private void EnsureEventSystem()
     {
         if (EventSystem.current != null)
+        {
+            if (EventSystem.current.GetComponent<BaseInputModule>() == null)
+                EventSystem.current.gameObject.AddComponent<StandaloneInputModule>();
+
             return;
+        }
 
         GameObject eventSystemObject = new GameObject("EventSystem");
         eventSystemObject.AddComponent<EventSystem>();
@@ -294,7 +330,7 @@ public class QuestLobbyPointer : MonoBehaviour
         canvasRect.sizeDelta = worldCanvasSize;
         canvasRect.localScale = Vector3.one * worldCanvasScale;
 
-        RequestCanvasRecenter();
+        ShowOptionsInFrontOfView("Canvas configured");
 
         if (lobbyCanvas.TryGetComponent(out CanvasScaler scaler))
         {
@@ -319,23 +355,48 @@ public class QuestLobbyPointer : MonoBehaviour
 
         loggedMissingViewPose = false;
 
-        Vector3 forward = Vector3.ProjectOnPlane(headRotation * Vector3.forward, Vector3.up);
-        if (forward.sqrMagnitude < 0.001f)
+        Vector3 viewForward = headRotation * Vector3.forward;
+        if (viewForward.sqrMagnitude < 0.001f)
         {
             Debug.LogWarning("[QuestLobbyPointer] Cannot recenter lobby canvas because HMD forward vector is invalid.");
             return false;
         }
 
-        forward.Normalize();
+        viewForward.Normalize();
 
-        canvasRect.position = headPosition + forward * canvasDistance + Vector3.up * canvasHeightOffset;
-        canvasRect.rotation = Quaternion.LookRotation(forward, Vector3.up);
+        Vector3 flatForward = Vector3.ProjectOnPlane(viewForward, Vector3.up);
+        if (flatForward.sqrMagnitude < 0.001f)
+            flatForward = lobbyCamera != null ? Vector3.ProjectOnPlane(lobbyCamera.transform.forward, Vector3.up) : Vector3.forward;
+
+        if (flatForward.sqrMagnitude < 0.001f)
+            flatForward = Vector3.forward;
+
+        flatForward.Normalize();
+
+        canvasRect.position = headPosition + viewForward * canvasDistance + Vector3.up * canvasHeightOffset;
+        canvasRect.rotation = Quaternion.LookRotation(flatForward, Vector3.up);
         return true;
     }
 
     private void RequestCanvasRecenter()
     {
         pendingRecenterFrames = Mathf.Max(1, recenterSettleFrames);
+    }
+
+    private void ShowOptionsInFrontOfView(string reason)
+    {
+        if (lobbyCanvas != null)
+            lobbyCanvas.gameObject.SetActive(true);
+
+        if (graphicRaycaster != null)
+            graphicRaycaster.enabled = true;
+
+        if (pointerLine != null)
+            pointerLine.gameObject.SetActive(true);
+
+        RequestCanvasRecenter();
+        PlaceCanvasInFrontOfUser();
+        Debug.Log($"[QuestLobbyPointer] Lobby options placed in front of view. Reason: {reason}");
     }
 
     private void ConfigureQuestUiLayout()
@@ -422,9 +483,16 @@ public class QuestLobbyPointer : MonoBehaviour
         clickAction.AddBinding($"{handBinding}/triggerPressed");
         clickAction.AddBinding($"{handBinding}/trigger");
         clickAction.AddBinding($"{handBinding}/gripPressed");
+        clickAction.AddBinding($"{handBinding}/pointerActivated");
+        clickAction.AddBinding($"{handBinding}/pointerActivateValue");
+        clickAction.AddBinding($"{handBinding}/pinchValue");
+        clickAction.AddBinding($"{handBinding}/pinchTouched");
+        clickAction.AddBinding($"{handBinding}/graspValue");
 
         recenterAction = new InputAction("Quest Lobby Recenter", InputActionType.Button);
         recenterAction.AddBinding($"{handBinding}/primaryButton");
+        recenterAction.AddBinding("<XRController>{RightHand}/primaryButton");
+        recenterAction.AddBinding("<OculusTouchController>{RightHand}/primaryButton");
 
         pointerPositionAction.Enable();
         pointerRotationAction.Enable();
@@ -438,6 +506,7 @@ public class QuestLobbyPointer : MonoBehaviour
     {
         GameObject lineObject = new GameObject("QuestLobbyPointerLine");
         pointerLine = lineObject.AddComponent<LineRenderer>();
+        pointerLine.useWorldSpace = true;
         pointerLine.positionCount = 2;
         pointerLine.startWidth = rayStartWidth;
         pointerLine.endWidth = rayEndWidth;
@@ -491,9 +560,10 @@ public class QuestLobbyPointer : MonoBehaviour
         GameObject nose = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         nose.name = "ControllerAimTip";
         nose.transform.SetParent(controllerVisual, false);
-        nose.transform.localPosition = new Vector3(0f, 0f, controllerBodySize.z * 0.58f);
+        nose.transform.localPosition = GetPointerPositionOffset();
         nose.transform.localScale = Vector3.one * 0.045f;
         SetVisualMaterial(nose, accentMaterial);
+        controllerRayAnchor = nose.transform;
 
         GameObject trigger = GameObject.CreatePrimitive(PrimitiveType.Cube);
         trigger.name = "ControllerTrigger";
@@ -516,18 +586,19 @@ public class QuestLobbyPointer : MonoBehaviour
 
     private bool TryGetPointerRay(out Ray pointerRay, out bool hasController, out Vector3 controllerPosition, out Quaternion controllerRotation)
     {
-        hasController = TryGetInputSystemPointerPose(out Vector3 handPosition, out Quaternion handRotation) ||
-            TryGetNodePose(pointerHand, out handPosition, out handRotation);
+        hasController = TryGetNodePose(pointerHand, out Vector3 handPosition, out Quaternion handRotation) ||
+            TryGetInputSystemPointerPose(out handPosition, out handRotation);
         controllerPosition = handPosition;
         controllerRotation = handRotation;
 
         if (hasController)
         {
-            Quaternion correctedRotation = handRotation * Quaternion.Euler(pointerRotationOffsetEuler);
-            Vector3 correctedPosition = handPosition + correctedRotation * pointerPositionOffset;
-            pointerRay = new Ray(correctedPosition, correctedRotation * Vector3.forward);
-            controllerPosition = correctedPosition;
-            controllerRotation = correctedRotation;
+            Quaternion visualRotation = GetControllerVisualRotation(handRotation);
+            Vector3 visualPosition = GetControllerVisualPosition(handPosition, visualRotation);
+            Vector3 rayOrigin = visualPosition + visualRotation * GetPointerPositionOffset();
+            pointerRay = new Ray(rayOrigin, visualRotation * Vector3.forward);
+            controllerPosition = handPosition;
+            controllerRotation = handRotation;
             return true;
         }
 
@@ -544,6 +615,25 @@ public class QuestLobbyPointer : MonoBehaviour
         controllerPosition = Vector3.zero;
         controllerRotation = Quaternion.identity;
         return false;
+    }
+
+    private Vector3 GetPointerPositionOffset()
+    {
+        return pointerPositionOffset.sqrMagnitude > 0.000001f
+            ? pointerPositionOffset
+            : DefaultPointerPositionOffset;
+    }
+
+    private Quaternion GetControllerVisualRotation(Quaternion controllerRotation)
+    {
+        return controllerRotation *
+            Quaternion.Euler(pointerRotationOffsetEuler) *
+            Quaternion.Euler(controllerVisualRotationOffsetEuler);
+    }
+
+    private Vector3 GetControllerVisualPosition(Vector3 controllerPosition, Quaternion visualRotation)
+    {
+        return controllerPosition + visualRotation * controllerVisualPositionOffset;
     }
 
     private bool TryGetInputSystemPointerPose(out Vector3 position, out Quaternion rotation)
@@ -568,14 +658,6 @@ public class QuestLobbyPointer : MonoBehaviour
 #else
         return false;
 #endif
-    }
-
-    private bool TryGetControllerVisualPose(out Vector3 position, out Quaternion rotation)
-    {
-        if (TryGetNodePose(pointerHand, out position, out rotation))
-            return true;
-
-        return TryGetInputSystemPointerPose(out position, out rotation);
     }
 
     private bool TryGetCanvasHit(Ray pointerRay, out Vector3 hitWorld, out Vector2 screenPoint)
@@ -610,7 +692,7 @@ public class QuestLobbyPointer : MonoBehaviour
         bestResult = default;
         raycastResults.Clear();
 
-        pointerEventData.position = screenPoint;
+        UpdatePointerPosition(screenPoint);
         graphicRaycaster.Raycast(pointerEventData, raycastResults);
 
         for (int i = 0; i < raycastResults.Count; i++)
@@ -650,6 +732,16 @@ public class QuestLobbyPointer : MonoBehaviour
         };
         bestResult = pointerEventData.pointerCurrentRaycast;
         return null;
+    }
+
+    private void UpdatePointerPosition(Vector2 screenPoint)
+    {
+        pointerEventData.delta = hasLastPointerPosition
+            ? screenPoint - lastPointerPosition
+            : Vector2.zero;
+        pointerEventData.position = screenPoint;
+        lastPointerPosition = screenPoint;
+        hasLastPointerPosition = true;
     }
 
     private GameObject FindSelectableAtWorldPoint(Vector3 hitWorld, Vector2 screenPoint, out RaycastResult result)
@@ -702,8 +794,21 @@ public class QuestLobbyPointer : MonoBehaviour
     private bool IsClickPressed()
     {
 #if ENABLE_INPUT_SYSTEM
-        if (clickAction != null && clickAction.controls.Count > 0 && clickAction.ReadValue<float>() >= triggerThreshold)
-            return true;
+        if (clickAction != null && clickAction.controls.Count > 0)
+        {
+            if (clickAction.IsPressed())
+                return true;
+
+            try
+            {
+                if (clickAction.ReadValue<float>() >= triggerThreshold)
+                    return true;
+            }
+            catch (System.InvalidOperationException)
+            {
+                // Some controller layouts expose a button control that cannot be read as a float.
+            }
+        }
 #endif
 
         UnityEngine.XR.InputDevice device = InputDevices.GetDeviceAtXRNode(pointerHand);
@@ -746,18 +851,25 @@ public class QuestLobbyPointer : MonoBehaviour
         pointerEventData.pointerCurrentRaycast = raycastResult;
 
         if (target == hoveredObject)
+        {
+            if (hoveredObject != null)
+                ExecuteEvents.Execute(hoveredObject, pointerEventData, ExecuteEvents.pointerMoveHandler);
+
             return;
+        }
 
         ClearHover();
         hoveredObject = target;
+        pointerEventData.pointerEnter = hoveredObject;
 
         if (hoveredObject == null)
             return;
 
         ExecuteEvents.Execute(hoveredObject, pointerEventData, ExecuteEvents.pointerEnterHandler);
+        ExecuteEvents.Execute(hoveredObject, pointerEventData, ExecuteEvents.pointerMoveHandler);
 
         if (EventSystem.current != null)
-            EventSystem.current.SetSelectedGameObject(hoveredObject);
+            EventSystem.current.SetSelectedGameObject(hoveredObject, pointerEventData);
     }
 
     private void Press(GameObject target)
@@ -770,6 +882,8 @@ public class QuestLobbyPointer : MonoBehaviour
         pointerEventData.eligibleForClick = true;
         pointerEventData.dragging = false;
         pointerEventData.useDragThreshold = true;
+        pointerEventData.clickTime = Time.unscaledTime;
+        pointerEventData.clickCount = 1;
 
         GameObject pointerPress = ExecuteEvents.ExecuteHierarchy(target, pointerEventData, ExecuteEvents.pointerDownHandler);
 
@@ -778,6 +892,13 @@ public class QuestLobbyPointer : MonoBehaviour
 
         pointerEventData.pointerPress = pointerPress;
         pointerEventData.rawPointerPress = target;
+        pointerEventData.pointerDrag = ExecuteEvents.GetEventHandler<IDragHandler>(target);
+
+        if (pointerEventData.pointerDrag != null)
+            ExecuteEvents.Execute(pointerEventData.pointerDrag, pointerEventData, ExecuteEvents.initializePotentialDrag);
+
+        if (EventSystem.current != null)
+            EventSystem.current.SetSelectedGameObject(target, pointerEventData);
     }
 
     private void Release(GameObject target)
@@ -794,9 +915,22 @@ public class QuestLobbyPointer : MonoBehaviour
         if (pointerPress != null && pointerPress == clickHandler && pointerEventData.eligibleForClick)
             ExecuteEvents.Execute(pointerPress, pointerEventData, ExecuteEvents.pointerClickHandler);
 
+        if (pointerEventData.pointerDrag != null && pointerEventData.dragging)
+            ExecuteEvents.Execute(pointerEventData.pointerDrag, pointerEventData, ExecuteEvents.endDragHandler);
+
         pointerEventData.eligibleForClick = false;
         pointerEventData.pointerPress = null;
         pointerEventData.rawPointerPress = null;
+        pointerEventData.pointerDrag = null;
+        pointerEventData.dragging = false;
+    }
+
+    private void CancelPress()
+    {
+        if (pointerEventData != null && (wasPressed || pointerEventData.pointerPress != null))
+            Release(null);
+
+        wasPressed = false;
     }
 
     private void ClearHover()
@@ -805,6 +939,8 @@ public class QuestLobbyPointer : MonoBehaviour
             ExecuteEvents.Execute(hoveredObject, pointerEventData, ExecuteEvents.pointerExitHandler);
 
         hoveredObject = null;
+        if (pointerEventData != null)
+            pointerEventData.pointerEnter = null;
     }
 
     private void UpdateVisual(Ray pointerRay, bool hasHit, Vector3 endPoint)
@@ -833,9 +969,12 @@ public class QuestLobbyPointer : MonoBehaviour
         if (!visible)
             return;
 
-        Quaternion visualRotation = rotation * Quaternion.Euler(controllerVisualRotationOffsetEuler);
-        Vector3 visualPosition = position + visualRotation * controllerVisualPositionOffset;
+        Quaternion visualRotation = GetControllerVisualRotation(rotation);
+        Vector3 visualPosition = GetControllerVisualPosition(position, visualRotation);
         controllerVisual.SetPositionAndRotation(visualPosition, visualRotation);
+
+        if (controllerRayAnchor != null)
+            controllerRayAnchor.localPosition = GetPointerPositionOffset();
     }
 
     private Vector3 PointerRayOriginFallback()
@@ -856,11 +995,6 @@ public class QuestLobbyPointer : MonoBehaviour
             return true;
         }
 
-#if UNITY_ANDROID && !UNITY_EDITOR
-        position = Vector3.zero;
-        rotation = Quaternion.identity;
-        return false;
-#else
         if (lobbyCamera != null)
         {
             Transform cameraTransform = lobbyCamera.transform;
@@ -872,7 +1006,6 @@ public class QuestLobbyPointer : MonoBehaviour
         position = Vector3.zero;
         rotation = Quaternion.identity;
         return false;
-#endif
     }
 
     private Vector3 GetViewFallbackPosition()

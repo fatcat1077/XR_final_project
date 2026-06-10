@@ -12,8 +12,43 @@ public class SpeechToTextClient : MonoBehaviour
     [SerializeField] private BlackboardManager blackboardManager;
     [SerializeField] private TMP_Text statusText;
 
+    private void Awake()
+    {
+        EnsureRuntimeReferences();
+    }
+
+    public void Configure(BlackboardManager manager, TMP_Text status)
+    {
+        if (manager != null)
+            blackboardManager = manager;
+
+        if (status != null)
+            statusText = status;
+
+        EnsureRuntimeReferences();
+    }
+
+    public void EnsureRuntimeReferences()
+    {
+        if (blackboardManager == null)
+            blackboardManager = FindObjectOfType<BlackboardManager>(true);
+
+        if (statusText == null)
+            statusText = FindTextObject("StatusText");
+    }
+
     public void SendWavToServer(byte[] wavData)
     {
+        EnsureRuntimeReferences();
+
+        if (wavData == null || wavData.Length == 0)
+        {
+            Debug.LogError("[SpeechToTextClient] Cannot send empty WAV data.");
+            SetStatus("No audio to send");
+            return;
+        }
+
+        Debug.Log($"[SpeechToTextClient] Queueing WAV upload. bytes={wavData.Length}");
         StartCoroutine(PostWavCoroutine(wavData));
     }
 
@@ -32,41 +67,125 @@ public class SpeechToTextClient : MonoBehaviour
 #endif
 
         using UnityWebRequest request = UnityWebRequest.Post(resolvedServerUrl, form);
+        request.timeout = 25;
 
-        SetStatus("Sending audio to Whisper server...");
+        SetStatus("Sending audio to STT server...");
         Debug.Log($"[SpeechToTextClient] POST -> {resolvedServerUrl}");
 
         yield return request.SendWebRequest();
 
         if (request.result != UnityWebRequest.Result.Success)
         {
-            Debug.LogError($"[SpeechToTextClient] Request failed: {request.error}");
-            SetStatus("Speech-to-text failed");
+            Debug.LogError($"[SpeechToTextClient] Request failed: result={request.result}, code={request.responseCode}, error={request.error}, body={request.downloadHandler?.text}");
+            SetStatus($"STT connection failed: {DescribeRequestError(request)}");
             yield break;
         }
 
         string json = request.downloadHandler.text;
         Debug.Log($"[SpeechToTextClient] Server response = {json}");
 
-        SpeechToTextResponse response = JsonUtility.FromJson<SpeechToTextResponse>(json);
+        string recognizedText = ExtractRecognizedText(json);
 
-        if (response == null || string.IsNullOrWhiteSpace(response.text))
+        if (string.IsNullOrWhiteSpace(recognizedText))
         {
             Debug.LogWarning("[SpeechToTextClient] Empty transcription result.");
             SetStatus("No text recognized");
             yield break;
         }
 
-        SetStatus("Speech recognized");
+        PublishRecognizedText(recognizedText);
+        SetStatus("STT connected: caption updated");
+    }
 
-        if (blackboardManager != null)
+    private static string DescribeRequestError(UnityWebRequest request)
+    {
+        if (request == null)
+            return "unknown error";
+
+        if (!string.IsNullOrWhiteSpace(request.error))
+            return request.error;
+
+        if (request.responseCode > 0)
+            return $"HTTP {request.responseCode}";
+
+        return request.result.ToString();
+    }
+
+    private static string ExtractRecognizedText(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return string.Empty;
+
+        try
         {
-            blackboardManager.SetText(response.text);
+            SpeechToTextResponse response = JsonUtility.FromJson<SpeechToTextResponse>(json);
+            if (response == null)
+                return string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(response.text))
+                return response.text;
+
+            if (!string.IsNullOrWhiteSpace(response.transcript))
+                return response.transcript;
+
+            if (!string.IsNullOrWhiteSpace(response.result))
+                return response.result;
         }
-        else
+        catch (System.Exception exception)
         {
-            Debug.LogError("[SpeechToTextClient] blackboardManager is not assigned.");
+            Debug.LogWarning($"[SpeechToTextClient] Could not parse STT response JSON: {exception.Message}");
         }
+
+        return string.Empty;
+    }
+
+    private void PublishRecognizedText(string recognizedText)
+    {
+        string text = string.IsNullOrWhiteSpace(recognizedText)
+            ? string.Empty
+            : recognizedText.Trim();
+
+        bool sentToClassroomState = false;
+        ClassroomSessionState sessionState = ClassroomSessionState.Instance != null
+            ? ClassroomSessionState.Instance
+            : FindObjectOfType<ClassroomSessionState>();
+
+        if (sessionState != null && sessionState.Object != null && sessionState.Object.IsValid)
+        {
+            sessionState.RequestSetBlackboardText(text);
+            sentToClassroomState = true;
+        }
+
+        SetLocalSubtitleText(text);
+
+        if (blackboardManager != null && blackboardManager.isActiveAndEnabled && blackboardManager.gameObject.activeInHierarchy)
+            blackboardManager.SetText(text);
+
+        Debug.Log($"[SpeechToTextClient] Published recognized text. classroomState={sentToClassroomState}, text={text}");
+    }
+
+    private static void SetLocalSubtitleText(string text)
+    {
+        TMP_Text[] textObjects = FindObjectsOfType<TMP_Text>(true);
+        for (int i = 0; i < textObjects.Length; i++)
+        {
+            TMP_Text textObject = textObjects[i];
+            if (textObject != null && textObject.name == "SubtitleText")
+                textObject.text = text ?? string.Empty;
+        }
+    }
+
+    private static TMP_Text FindTextObject(string objectName)
+    {
+        TMP_Text[] textObjects = FindObjectsOfType<TMP_Text>(true);
+        for (int i = 0; i < textObjects.Length; i++)
+        {
+            TMP_Text textObject = textObjects[i];
+            if (textObject != null && textObject.name == objectName)
+                return textObject;
+        }
+
+        return null;
     }
 
     private void SetStatus(string message)
@@ -74,6 +193,7 @@ public class SpeechToTextClient : MonoBehaviour
         if (statusText != null)
             statusText.text = message;
 
+        QuestCaptionStatusReporter.SetStatus(message);
         Debug.Log($"[SpeechToTextClient] Status = {message}");
     }
 
@@ -81,5 +201,7 @@ public class SpeechToTextClient : MonoBehaviour
     private class SpeechToTextResponse
     {
         public string text;
+        public string transcript;
+        public string result;
     }
 }

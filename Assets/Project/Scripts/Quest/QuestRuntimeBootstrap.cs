@@ -9,6 +9,7 @@ public static class QuestRuntimeBootstrap
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
         RequestMicrophonePermissionIfNeeded();
+        ApplySttServerUrlFromIntent();
         WarnIfSttServerUsesLoopback();
     }
 
@@ -23,10 +24,47 @@ public static class QuestRuntimeBootstrap
 #endif
     }
 
+    private static void ApplySttServerUrlFromIntent()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        string sttUrl = ReadAndroidIntentStringExtra("xr_stt_url");
+        if (string.IsNullOrWhiteSpace(sttUrl))
+            sttUrl = ReadAndroidIntentStringExtra("stt_url");
+
+        if (string.IsNullOrWhiteSpace(sttUrl))
+            return;
+
+        RuntimeNetworkSettings.SaveSttServerUrl(sttUrl);
+        Debug.Log($"[QuestRuntimeBootstrap] Applied STT server URL from Android intent: {RuntimeNetworkSettings.NormalizeSttServerUrl(sttUrl)}");
+#endif
+    }
+
+    private static string ReadAndroidIntentStringExtra(string key)
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        try
+        {
+            using (AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
+            using (AndroidJavaObject intent = activity.Call<AndroidJavaObject>("getIntent"))
+            {
+                return intent.Call<string>("getStringExtra", key);
+            }
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogWarning($"[QuestRuntimeBootstrap] Could not read Android intent extra '{key}': {exception.Message}");
+        }
+#endif
+
+        return null;
+    }
+
     private static void WarnIfSttServerUsesLoopback()
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
         string serverUrl = RuntimeNetworkSettings.GetSttServerUrl(string.Empty);
+        Debug.Log($"[QuestRuntimeBootstrap] STT server URL = {serverUrl}");
 
         if (RuntimeNetworkSettings.IsLoopbackUrl(serverUrl))
         {

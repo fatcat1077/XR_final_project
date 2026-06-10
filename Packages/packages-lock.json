@@ -1,5 +1,19 @@
 {
   "dependencies": {
+    "com.meta.xr.sdk.voice": {
+      "version": "85.0.0",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.oshoham.unity-google-cloud-streaming-speech-to-text": {
+      "version": "0.1.8",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://package.openupm.com"
+    },
     "com.unity.collab-proxy": {
       "version": "2.12.4",
       "depth": 0,

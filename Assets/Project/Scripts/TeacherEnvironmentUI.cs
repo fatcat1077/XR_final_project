@@ -17,19 +17,40 @@ public class TeacherEnvironmentUI : MonoBehaviour
 
     public void OnClickDefault()
     {
-        if (environmentManager != null)
-            environmentManager.SetEnvironment(EnvironmentType.Default);
+        RequestEnvironment(EnvironmentType.Default);
     }
 
     public void OnClickOcean()
     {
-        if (environmentManager != null)
-            environmentManager.SetEnvironment(EnvironmentType.Ocean);
+        RequestEnvironment(EnvironmentType.Ocean);
     }
 
     public void OnClickSpace()
     {
+        RequestEnvironment(EnvironmentType.Space);
+    }
+
+    private void RequestEnvironment(EnvironmentType type)
+    {
+        ClassroomEnvironment classroomEnvironment = (ClassroomEnvironment)(int)type;
+
+        if (classroomEnvironment == ClassroomEnvironment.Ocean || classroomEnvironment == ClassroomEnvironment.Space)
+        {
+            bool sceneLoadRequested = QuestClassroomSceneTravel.RequestEnvironmentScene(classroomEnvironment, "TeacherEnvironmentUI environment button");
+            Debug.Log($"[TeacherEnvironmentUI] Requested scene environment = {type}, sceneLoadRequested={sceneLoadRequested}");
+            return;
+        }
+
+        if (ClassroomSessionState.TryGetActiveNetworked(out ClassroomSessionState sessionState))
+            sessionState.RequestSetEnvironment(classroomEnvironment);
+
         if (environmentManager != null)
-            environmentManager.SetEnvironment(EnvironmentType.Space);
+            environmentManager.SetEnvironment(type);
+
+        EM_test[] localEnvironmentViews = FindObjectsOfType<EM_test>();
+        for (int i = 0; i < localEnvironmentViews.Length; i++)
+            localEnvironmentViews[i].HandleEnvironmentChanged(classroomEnvironment);
+
+        Debug.Log($"[TeacherEnvironmentUI] Requested environment = {type}");
     }
 }
