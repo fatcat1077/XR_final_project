@@ -35,24 +35,8 @@ public class InputManager : MonoBehaviour
             return;
         }
 
-        if (environment == ClassroomEnvironment.Ocean || environment == ClassroomEnvironment.Space)
-        {
-            bool sceneLoadRequested = QuestClassroomSceneTravel.RequestEnvironmentScene(environment, "InputManager keyboard shortcut");
-            Debug.Log($"[InputManager] Teacher requested scene environment: {environment}, sceneLoadRequested={sceneLoadRequested}");
-            return;
-        }
-
-        if (environment == ClassroomEnvironment.Default)
-        {
-            bool sceneLoadRequested = QuestClassroomSceneTravel.RequestClassroomScene("InputManager keyboard shortcut");
-            Debug.Log($"[InputManager] Teacher requested classroom scene. sceneLoadRequested={sceneLoadRequested}");
-        }
-
-        if (!TryGetSessionState(out ClassroomSessionState sessionState))
-            return;
-
-        sessionState.RequestSetEnvironment(environment);
-        Debug.Log($"[InputManager] Teacher requested environment: {environment}");
+        bool requested = QuestClassroomSceneTravel.RequestEnvironmentScene(environment, "InputManager keyboard shortcut");
+        Debug.Log($"[InputManager] Teacher requested environment: {environment}, requested={requested}");
     }
 
     private static void RequestStudentHandRaised(bool raised)

@@ -10,7 +10,7 @@ public enum EnvironmentType
 
 public class EnvironmentManager : NetworkBehaviour
 {
-    [Header("Environment Roots")]
+    [Header("Legacy Environment Roots")]
     [SerializeField] private GameObject envDefault;
     [SerializeField] private GameObject envOcean;
     [SerializeField] private GameObject envSpace;
@@ -32,7 +32,7 @@ public class EnvironmentManager : NetworkBehaviour
         }
 
         CurrentEnvironment = (int)type;
-        ApplyEnvironment(CurrentEnvironment); // Host 本地先立即更新
+        ApplyEnvironment(CurrentEnvironment);
         Debug.Log($"[EnvironmentManager] SetEnvironment -> {type}");
     }
 
@@ -43,15 +43,13 @@ public class EnvironmentManager : NetworkBehaviour
 
     private void ApplyEnvironment(int envIndex)
     {
-        if (envDefault != null)
-            envDefault.SetActive(envIndex == (int)EnvironmentType.Default);
-
         if (envOcean != null)
-            envOcean.SetActive(envIndex == (int)EnvironmentType.Ocean);
+            envOcean.SetActive(false);
 
         if (envSpace != null)
-            envSpace.SetActive(envIndex == (int)EnvironmentType.Space);
+            envSpace.SetActive(false);
 
+        EnvironmentContentManager.ApplyEnvironmentLocal((ClassroomEnvironment)envIndex, "legacy EnvironmentManager state");
         Debug.Log($"[EnvironmentManager] ApplyEnvironment -> {(EnvironmentType)envIndex}");
     }
 }

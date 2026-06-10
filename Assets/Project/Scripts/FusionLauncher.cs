@@ -118,6 +118,14 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
     private string GetRoomName()
     {
+        string androidIntentRoomName = ReadAndroidIntentRoomName();
+        if (!string.IsNullOrWhiteSpace(androidIntentRoomName))
+        {
+            string trimmedIntentRoomName = androidIntentRoomName.Trim();
+            Debug.Log($"[FusionLauncher] GetRoomName() from Android intent = '{trimmedIntentRoomName}'");
+            return trimmedIntentRoomName;
+        }
+
         if (useFixedRoomName)
         {
             Debug.Log($"[FusionLauncher] GetRoomName() using fixed room name = '{fixedRoomName}'");
@@ -133,6 +141,38 @@ public class FusionLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
         Debug.Log("[FusionLauncher] GetRoomName() fallback to default = 'XRRoom01'");
         return "XRRoom01";
+    }
+
+    private static string ReadAndroidIntentRoomName()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        string roomName = ReadAndroidIntentStringExtra("xr_room_name");
+        if (string.IsNullOrWhiteSpace(roomName))
+            roomName = ReadAndroidIntentStringExtra("room_name");
+
+        return roomName;
+#else
+        return null;
+#endif
+    }
+
+    private static string ReadAndroidIntentStringExtra(string key)
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        try
+        {
+            using AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+            using AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+            using AndroidJavaObject intent = activity.Call<AndroidJavaObject>("getIntent");
+            return intent.Call<string>("getStringExtra", key);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"[FusionLauncher] Could not read Android intent extra '{key}': {exception.Message}");
+        }
+#endif
+
+        return null;
     }
 
     private async Task StartGameWithRetry(GameMode mode)

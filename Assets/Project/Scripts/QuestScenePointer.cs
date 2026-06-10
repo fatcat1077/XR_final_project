@@ -735,32 +735,8 @@ public sealed class QuestScenePointer : MonoBehaviour
             return;
         }
 
-        if (environment == ClassroomEnvironment.Ocean || environment == ClassroomEnvironment.Space)
-        {
-            bool sceneLoadRequested = QuestClassroomSceneTravel.RequestEnvironmentScene(environment, "Quest teacher environment button");
-            Debug.Log($"[QuestScenePointer] Teacher requested scene environment: {environment}. sceneLoadRequested={sceneLoadRequested}");
-            return;
-        }
-
-        bool requested = false;
-        if (TryGetValidSessionState(out ClassroomSessionState sessionState))
-        {
-            sessionState.RequestSetEnvironment(environment);
-            requested = true;
-        }
-
-        EnvironmentManager environmentManager = FindObjectOfType<EnvironmentManager>();
-        if (environmentManager != null)
-        {
-            environmentManager.SetEnvironment((EnvironmentType)(int)environment);
-            requested = true;
-        }
-
-        EM_test[] localEnvironmentViews = FindObjectsOfType<EM_test>();
-        for (int i = 0; i < localEnvironmentViews.Length; i++)
-            localEnvironmentViews[i].HandleEnvironmentChanged(environment);
-
-        Debug.Log($"[QuestScenePointer] Teacher requested environment: {environment}. networkRequestSent={requested}");
+        bool requested = QuestClassroomSceneTravel.RequestEnvironmentScene(environment, "Quest teacher environment button");
+        Debug.Log($"[QuestScenePointer] Teacher requested environment: {environment}. requested={requested}");
     }
 
     private void RequestClearBlackboard()
@@ -902,8 +878,8 @@ public sealed class QuestScenePointer : MonoBehaviour
 
     private void RequestReturnToClassroom()
     {
-        bool sceneLoadRequested = QuestClassroomSceneTravel.RequestClassroomScene("Quest A button return");
-        Debug.Log($"[QuestScenePointer] Requested return to Test_classroom from '{gameObject.scene.name}'. role={LocalUserProfile.Role}, sceneLoadRequested={sceneLoadRequested}");
+        bool requested = QuestClassroomSceneTravel.RequestClassroomScene("Quest A button return");
+        Debug.Log($"[QuestScenePointer] Requested default classroom environment from '{gameObject.scene.name}'. role={LocalUserProfile.Role}, requested={requested}");
     }
 
     private static bool TryGetSpeechRecorder(out SpeechRecorder speechRecorder)
@@ -2918,19 +2894,13 @@ internal static class QuestDirectSceneIntentLauncher
             if (string.IsNullOrWhiteSpace(requestedScene))
                 yield break;
 
-            yield return null;
-            yield return new WaitForSeconds(0.35f);
-
             string scenePath = ResolveScenePath(requestedScene);
-            int buildIndex = ResolveBuildIndex(scenePath);
-            if (buildIndex < 0)
-            {
-                Debug.LogWarning($"[QuestDirectSceneIntentLauncher] Requested scene '{requestedScene}' was not found in Build Settings.");
-                yield break;
-            }
+            yield return null;
+            TryAutoStartSessionForDirectScene();
+            yield return WaitForClassroomSceneIfNeeded(scenePath);
 
-            Debug.Log($"[QuestDirectSceneIntentLauncher] Loading requested scene '{scenePath}' for adb visual verification.");
-            SceneManager.LoadScene(buildIndex, LoadSceneMode.Single);
+            bool requested = QuestClassroomSceneTravel.RequestSceneByPath(scenePath, "adb direct environment request");
+            Debug.Log($"[QuestDirectSceneIntentLauncher] Requested runtime environment for '{scenePath}'. requested={requested}");
         }
 
         private static bool IsDirectSceneLaunchRequested()
@@ -2955,6 +2925,90 @@ internal static class QuestDirectSceneIntentLauncher
 #else
             return null;
 #endif
+        }
+
+        private static void TryAutoStartSessionForDirectScene()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            string role = ReadAndroidIntentStringExtra("xr_auto_start_role");
+            if (string.IsNullOrWhiteSpace(role))
+                role = ReadAndroidIntentStringExtra("xr_direct_role");
+
+            if (string.IsNullOrWhiteSpace(role))
+                return;
+
+            FusionLauncher launcher = Object.FindObjectOfType<FusionLauncher>(true);
+            if (launcher == null)
+            {
+                Debug.LogWarning($"[QuestDirectSceneIntentLauncher] Could not auto-start '{role}' because FusionLauncher was not found.");
+                return;
+            }
+
+            if (string.Equals(role, "teacher", System.StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(role, "host", System.StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(role, "server", System.StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.Log("[QuestDirectSceneIntentLauncher] Auto-starting Teacher Host for direct environment request.");
+                launcher.StartAsTeacherHost();
+                return;
+            }
+
+            if (string.Equals(role, "student", System.StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(role, "client", System.StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.Log("[QuestDirectSceneIntentLauncher] Auto-starting Student Client for direct environment request.");
+                launcher.StartAsStudentClient();
+                return;
+            }
+
+            Debug.LogWarning($"[QuestDirectSceneIntentLauncher] Unknown xr_auto_start_role='{role}'.");
+#endif
+        }
+
+        private static IEnumerator WaitForClassroomSceneIfNeeded(string scenePath)
+        {
+            if (!IsEnvironmentOrClassroomRequest(scenePath))
+            {
+                yield return new WaitForSeconds(0.35f);
+                yield break;
+            }
+
+            float deadline = Time.realtimeSinceStartup + 60f;
+            while (!IsClassroomRuntimeReady() && Time.realtimeSinceStartup < deadline)
+                yield return null;
+
+            yield return new WaitForSeconds(0.75f);
+        }
+
+        private static bool IsEnvironmentOrClassroomRequest(string scenePath)
+        {
+            return IsScenePath(scenePath, QuestClassroomSceneTravel.OceanScenePath) ||
+                IsScenePath(scenePath, QuestClassroomSceneTravel.SpaceScenePath) ||
+                IsScenePath(scenePath, QuestClassroomSceneTravel.TestClassroomScenePath);
+        }
+
+        private static bool IsClassroomScene(Scene scene)
+        {
+            string scenePath = scene.path.Replace('\\', '/');
+            return scene.name.IndexOf("Classroom", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                scenePath.EndsWith("/Test_classroom.unity", System.StringComparison.OrdinalIgnoreCase) ||
+                scenePath.EndsWith("/Classroom.unity", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsClassroomRuntimeReady()
+        {
+            if (EnvironmentContentManager.Instance != null ||
+                ClassroomSessionState.Instance != null)
+                return true;
+
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
+                Scene scene = SceneManager.GetSceneAt(i);
+                if (scene.IsValid() && scene.isLoaded && IsClassroomScene(scene))
+                    return true;
+            }
+
+            return IsClassroomScene(SceneManager.GetActiveScene());
         }
 
         private static string ReadAndroidIntentStringExtra(string key)
@@ -2995,18 +3049,13 @@ internal static class QuestDirectSceneIntentLauncher
             return $"Assets/Scenes/{normalized}.unity";
         }
 
-        private static int ResolveBuildIndex(string scenePath)
+        private static bool IsScenePath(string scenePath, string expectedPath)
         {
-            string expectedPath = scenePath.Replace('\\', '/');
-            for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
-            {
-                string path = SceneUtility.GetScenePathByBuildIndex(i).Replace('\\', '/');
-                if (string.Equals(path, expectedPath, System.StringComparison.OrdinalIgnoreCase))
-                    return i;
-            }
-
-            return -1;
+            string normalizedScenePath = (scenePath ?? string.Empty).Replace('\\', '/');
+            string normalizedExpectedPath = (expectedPath ?? string.Empty).Replace('\\', '/');
+            return string.Equals(normalizedScenePath, normalizedExpectedPath, System.StringComparison.OrdinalIgnoreCase);
         }
+
     }
 }
 

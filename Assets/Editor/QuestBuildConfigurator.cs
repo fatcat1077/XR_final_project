@@ -19,8 +19,6 @@ public static class QuestBuildConfigurator
     {
         "Assets/Scenes/Test_lobby.unity",
         "Assets/Scenes/Test_classroom.unity",
-        "Assets/Scenes/Ocean.unity",
-        "Assets/Scenes/Space.unity",
     };
 
     private static readonly string[] QuestFeatureIds =
@@ -95,7 +93,7 @@ public static class QuestBuildConfigurator
             .Select(scenePath => new EditorBuildSettingsScene(scenePath, true))
             .ToArray();
 
-        Debug.Log("[QuestBuildConfigurator] Quest scene order configured: Test_lobby -> Test_classroom -> Ocean -> Space.");
+        Debug.Log("[QuestBuildConfigurator] Quest scene order configured: Test_lobby -> Test_classroom.");
     }
 
     private static void ConfigureXRManagement(BuildTargetGroup targetGroup)

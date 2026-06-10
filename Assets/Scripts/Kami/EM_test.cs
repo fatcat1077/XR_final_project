@@ -1,32 +1,34 @@
 using UnityEngine;
 
-public class EM_test : MonoBehaviour 
+public class EM_test : MonoBehaviour
 {
-    [Header("Environment Roots")]
+    [Header("Legacy Environment Roots")]
     [SerializeField] private GameObject envDefault;
     [SerializeField] private GameObject envOcean;
     [SerializeField] private GameObject envSpace;
 
-    private bool _isInitialized = false;
+    private bool isInitialized;
 
-    public void HandleEnvironmentChanged(ClassroomEnvironment env)
+    public void HandleEnvironmentChanged(ClassroomEnvironment environment)
     {
-        Debug.Log($"[EM_test] 收到環境通知: {env}");
-        ApplyEnvironment(env);
+        ApplyEnvironment(environment);
     }
 
-    private void ApplyEnvironment(ClassroomEnvironment env)
+    private void ApplyEnvironment(ClassroomEnvironment environment)
     {
-        if (envDefault != null) envDefault.SetActive(env == ClassroomEnvironment.Default);
-        if (envOcean != null) envOcean.SetActive(env == ClassroomEnvironment.Ocean);
-        if (envSpace != null) envSpace.SetActive(env == ClassroomEnvironment.Space);
+        if (envOcean != null)
+            envOcean.SetActive(false);
+
+        if (envSpace != null)
+            envSpace.SetActive(false);
+
+        EnvironmentContentManager.ApplyEnvironmentLocal(environment, "legacy EM_test state");
+        Debug.Log($"[EM_test] Environment -> {environment}");
     }
-    
+
     private void OnDestroy()
     {
-        if (_isInitialized && ClassroomSessionState.Instance != null)
-        {
+        if (isInitialized && ClassroomSessionState.Instance != null)
             ClassroomSessionState.Instance.OnEnvironmentChanged.RemoveListener(HandleEnvironmentChanged);
-        }
     }
 }

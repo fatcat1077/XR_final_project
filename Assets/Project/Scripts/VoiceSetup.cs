@@ -22,7 +22,7 @@ public class VoiceSetup : NetworkBehaviour
     private VoiceNetworkObject voiceNetworkObject;
     private Func<IAudioDesc> sharedMicrophoneInputFactory;
     private object recorderUserData;
-    private bool recorderRegistrationRetried;
+    private bool recorderRegistrationRefreshed;
     private float lastMicrophoneWarningTime = -999f;
     private string lastMicrophoneWarning;
 
@@ -168,7 +168,7 @@ public class VoiceSetup : NetworkBehaviour
     private void StartVoiceRecovery(string reason)
     {
         StopVoiceRecovery();
-        recorderRegistrationRetried = false;
+        recorderRegistrationRefreshed = false;
         voiceRecoveryCoroutine = StartCoroutine(VoiceRecoveryRoutine(reason));
     }
 
@@ -224,15 +224,11 @@ public class VoiceSetup : NetworkBehaviour
             return;
         }
 
-        if (voiceNetworkObject != null && voiceNetworkObject.RecorderInUse != recorder && fusionVoiceClient != null && !recorderRegistrationRetried)
-        {
-            bool registered = fusionVoiceClient.AddRecorder(recorder);
-            recorderRegistrationRetried = true;
-            Debug.Log($"[VoiceSetup] Retried recorder registration after scene change. registered={registered}, voiceState={fusionVoiceClient.ClientState}");
-        }
-
         if (fusionVoiceClient != null && fusionVoiceClient.ClientState == ClientState.Joined)
         {
+            if (!RefreshLocalRecorderRegistrationIfNeeded())
+                return;
+
             if (!recorder.RecordingEnabled)
             {
                 recorder.RecordingEnabled = true;
@@ -242,6 +238,32 @@ public class VoiceSetup : NetworkBehaviour
             if (!recorder.IsCurrentlyTransmitting)
                 recorder.RestartRecording();
         }
+    }
+
+    private bool RefreshLocalRecorderRegistrationIfNeeded()
+    {
+        if (recorderRegistrationRefreshed || fusionVoiceClient == null || recorder == null)
+            return recorderRegistrationRefreshed;
+
+        bool wasRecordingEnabled = recorder.RecordingEnabled;
+        recorder.RecordingEnabled = false;
+
+        fusionVoiceClient.RemoveRecorder(recorder);
+        bool registered = fusionVoiceClient.AddRecorder(recorder);
+
+        if (registered && wasRecordingEnabled)
+            recorder.RecordingEnabled = true;
+
+        if (registered)
+        {
+            recorderRegistrationRefreshed = true;
+            Debug.Log($"[VoiceSetup] Refreshed Photon Voice recorder registration after shared microphone became ready. voiceState={fusionVoiceClient.ClientState}");
+            return true;
+        }
+
+        recorder.RecordingEnabled = false;
+        LogMicrophoneWaitWarning($"Photon Voice recorder registration is not ready yet. voiceState={fusionVoiceClient.ClientState}");
+        return false;
     }
 
     private void MaintainRemoteSpeaker()
